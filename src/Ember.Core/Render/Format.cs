@@ -57,11 +57,12 @@ public static class Format
     public static string CurrencyPrefix(string isoCode) =>
         CurrencyPrefixes.TryGetValue(isoCode, out var symbol) ? symbol : $"{isoCode.ToUpperInvariant()} ";
 
-    /// <summary>Two decimals, symbol prefix, estimates prefixed "&#8776;".</summary>
+    /// <summary>Symbol prefix, estimates prefixed "&#8776;". Zero-decimal currencies (JPY/KRW/VND) drop the fractional part.</summary>
     public static string Money(double amount, string currencyIsoCode, bool estimate)
     {
         var prefix = estimate ? "≈" : "";
-        return $"{prefix}{CurrencyPrefix(currencyIsoCode)}{amount.ToString("F2", CultureInfo.InvariantCulture)}";
+        var format = IsZeroDecimalCurrency(currencyIsoCode) ? "F0" : "F2";
+        return $"{prefix}{CurrencyPrefix(currencyIsoCode)}{amount.ToString(format, CultureInfo.InvariantCulture)}";
     }
 
     /// <summary>Zero-decimal currencies, §4.2: minor-unit figures are not divided by 100.</summary>

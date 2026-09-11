@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Ember.Core.Render;
 
 namespace Ember.Tests;
 
@@ -10,5 +11,5 @@ internal static partial class TestSupport
 
     public static string StripAnsi(string s) => AnsiRegex().Replace(s, "");
 
-    public static int VisibleWidth(string s) => StripAnsi(s).Length;
+    public static int VisibleWidth(string s) => AnsiBuilder.DisplayWidth(StripAnsi(s));
 }

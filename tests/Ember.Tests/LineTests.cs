@@ -87,6 +87,19 @@ public class LineTests
     }
 
     [Fact]
+    public void EmptyModelSkipsEntireModelSectionWithNoLeadingSeparator()
+    {
+        var input = new Line1Input(Icons, null, "high", "my-project", "main", TimeSpan.FromMinutes(5), 10);
+        var line1 = Line.ComposeLine1(input, 999);
+        var text = StripAnsi(line1);
+        Assert.Contains("my-project", text);
+        Assert.DoesNotContain("high", text); // effort is part of the model section
+
+        var withModel = StripAnsi(Line.ComposeLine1(MakeLine1Input(), 999));
+        Assert.True(text.Length < withModel.Length, "absent model should produce a shorter line");
+    }
+
+    [Fact]
     public void Line1ShedsCtxThenDurationThenEffortAsWidthShrinks()
     {
         var input = MakeLine1Input();

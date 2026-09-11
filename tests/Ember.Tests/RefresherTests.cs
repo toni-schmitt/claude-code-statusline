@@ -37,6 +37,13 @@ public class RefresherTests : IDisposable
         Directory.Delete(_tempTmpDir, recursive: true);
     }
 
+    private static void WriteCacheSecure(string path, string content)
+    {
+        File.WriteAllText(path, content);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+
     [Fact]
     public void CachePathIsDeterministicForTheSameConfigDir()
     {
@@ -96,7 +103,7 @@ public class RefresherTests : IDisposable
     [Fact]
     public void ReadCacheReturnsUsageFromAWellFormedFile()
     {
-        File.WriteAllText(Refresher.CachePath(),
+        WriteCacheSecure(Refresher.CachePath(),
             """{"fetched_at_ms":0,"usage":{"extra_usage":{"is_enabled":true,"used_credits":42,"currency":"EUR"}}}""");
 
         var usage = Refresher.ReadCache();
@@ -115,16 +122,13 @@ public class RefresherTests : IDisposable
     [Fact]
     public void ReadCacheReturnsNullForCorruptFile()
     {
-        File.WriteAllText(Refresher.CachePath(), "not json at all");
+        WriteCacheSecure(Refresher.CachePath(), "not json at all");
         Assert.Null(Refresher.ReadCache());
     }
 
     [Fact]
     public void ReadCacheRejectsASymlinkedCacheFile()
     {
-        // §10: the shared /tmp on Linux makes the cache filename derivable by
-        // anyone on the machine; a symlink swapped in for the real file must
-        // never be trusted.
         var path = Refresher.CachePath();
         var decoyPath = Path.Combine(_tempTmpDir, "decoy.json");
         File.WriteAllText(decoyPath, """{"fetched_at_ms":0,"usage":{"extra_usage":{"is_enabled":true,"used_credits":999999}}}""");
@@ -132,6 +136,32 @@ public class RefresherTests : IDisposable
         File.CreateSymbolicLink(path, decoyPath);
 
         Assert.Null(Refresher.ReadCache());
+    }
+
+    [Fact]
+    public void ReadCacheRejectsAFileWithWrongPermissions()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        var path = Refresher.CachePath();
+        File.WriteAllText(path, """{"fetched_at_ms":0,"usage":{"extra_usage":{"is_enabled":true,"used_credits":42}}}""");
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.OtherRead);
+
+        Assert.Null(Refresher.ReadCache());
+    }
+
+    [Fact]
+    public void ReadCacheAcceptsAFileWithCorrectPermissions()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        var path = Refresher.CachePath();
+        File.WriteAllText(path, """{"fetched_at_ms":0,"usage":{"extra_usage":{"is_enabled":true,"used_credits":42}}}""");
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+        var usage = Refresher.ReadCache();
+        Assert.NotNull(usage);
+        Assert.Equal(42, usage!.ExtraUsage!.UsedCredits);
     }
 }
 

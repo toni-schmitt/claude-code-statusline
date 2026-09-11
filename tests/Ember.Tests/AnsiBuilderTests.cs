@@ -70,6 +70,45 @@ public class AnsiBuilderTests
         Assert.Equal(0, b.Width);
     }
 
+    [Fact]
+    public void DisplayWidthCountsCjkCharactersAsTwo()
+    {
+        Assert.Equal(2, AnsiBuilder.DisplayWidth("中"));
+        Assert.Equal(4, AnsiBuilder.DisplayWidth("中文"));
+        Assert.Equal(3, AnsiBuilder.DisplayWidth("A中")); // 1 + 2
+    }
+
+    [Fact]
+    public void DisplayWidthCountsAsciiAsOne()
+    {
+        Assert.Equal(5, AnsiBuilder.DisplayWidth("hello"));
+    }
+
+    [Fact]
+    public void ColoredTracksCjkDisplayWidth()
+    {
+        var b = new AnsiBuilder();
+        b.Colored("中文", 230);
+        Assert.Equal(4, b.Width); // two CJK chars = 4 columns
+    }
+
+    [Fact]
+    public void TruncateToWidthRespectsCjkWidth()
+    {
+        Assert.Equal(1, AnsiBuilder.TruncateToWidth("中文", 2)); // one CJK char fits in 2 columns
+        Assert.Equal(2, AnsiBuilder.TruncateToWidth("中文", 4)); // both fit in 4 columns
+        Assert.Equal(0, AnsiBuilder.TruncateToWidth("中文", 1)); // neither fits in 1 column
+    }
+
+    [Fact]
+    public void TruncateToWidthNeverSplitsSurrogatePair()
+    {
+        var text = "A😀B"; // A + 😀 (surrogate pair) + B
+        int idx = AnsiBuilder.TruncateToWidth(text, 2);
+        Assert.Equal(text[..idx], text[..idx]); // no split
+        Assert.True(idx == 1 || idx == 3, $"Expected 1 or 3, got {idx}");
+    }
+
     private static int CountOccurrences(string haystack, string needle)
     {
         int count = 0, index = 0;

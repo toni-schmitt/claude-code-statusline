@@ -68,16 +68,18 @@ public static class Line
             wrote = true;
         }
 
-        // model [+ effort]
-        b.Colored($"{input.Icons.Model} ", Palette.Label);
-        var model = input.ModelDisplayName ?? "";
-        b.Gradient(model, Gradient.ForText(model));
-        if (tier.ShowEffort && input.EffortLevel is { Length: > 0 } effort)
+        // model [+ effort] — skipped entirely when the model name is absent
+        if (input.ModelDisplayName is { Length: > 0 } model)
         {
-            b.Colored($" {input.Icons.Effort}", Palette.Label);
-            b.Colored(effort, Palette.GradientStop6);
+            b.Colored($"{input.Icons.Model} ", Palette.Label);
+            b.Gradient(model, Gradient.ForText(model));
+            if (tier.ShowEffort && input.EffortLevel is { Length: > 0 } effort)
+            {
+                b.Colored($" {input.Icons.Effort}", Palette.Label);
+                b.Colored(effort, Palette.GradientStop6);
+            }
+            wrote = true;
         }
-        wrote = true;
 
         // project [+ branch]
         Sep();

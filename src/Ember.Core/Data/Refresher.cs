@@ -96,12 +96,11 @@ public static class Refresher
     }
 
     /// <summary>
-    /// Rejects a cache file that is a symlink -- the shared, world-writable
-    /// <c>/tmp</c> on Linux makes the filename derivable, so a spoofed target
-    /// is the threat this guards against (§10). Ownership (uid) is the
-    /// other half of that check in the design; the BCL has no portable,
-    /// AOT-safe syscall for it, so this relies on symlink rejection plus the
-    /// refresher's own atomic same-user rename to keep the cache honest.
+    /// Rejects a cache file that is a symlink or not owner-exclusive (§10).
+    /// On a shared /tmp the filename is derivable, so both checks matter:
+    /// the symlink check stops redirection; the mode check (0600) stops a
+    /// planted regular file, because an attacker's file must grant
+    /// group/other read for the victim to open it, making its mode != 0600.
     /// </summary>
     private static bool IsSafeToRead(string path)
     {
@@ -109,7 +108,14 @@ public static class Refresher
         {
             var info = new FileInfo(path);
             if (!info.Exists) return false;
-            return info.LinkTarget is null;
+            if (info.LinkTarget is not null) return false;
+            if (!OperatingSystem.IsWindows())
+            {
+                var mode = File.GetUnixFileMode(path);
+                if (mode != (UnixFileMode.UserRead | UnixFileMode.UserWrite))
+                    return false;
+            }
+            return true;
         }
         catch
         {
@@ -172,6 +178,18 @@ public static class Refresher
             }
             catch { /* best effort */ }
 
+            // Reject symlinks at the lock path — on a shared /tmp a symlink
+            // could redirect the stale-lock File.Delete to an unrelated target.
+            try
+            {
+                if (new FileInfo(lockPath) is { Exists: true, LinkTarget: not null })
+                {
+                    try { File.Delete(lockPath); } catch { }
+                    return false;
+                }
+            }
+            catch { /* best effort */ }
+
             if (File.Exists(lockPath))
             {
                 var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockPath);
@@ -180,6 +198,8 @@ public static class Refresher
             }
             // FileMode.CreateNew is atomic: fails if the file already exists.
             using var _ = new FileStream(lockPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(lockPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             return true;
         }
         catch

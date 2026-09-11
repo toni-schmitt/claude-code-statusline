@@ -56,7 +56,8 @@ public static class Row
         int used = b.Width;
         var desc = task.Description ?? "";
         int room = Math.Max(0, columns - used);
-        b.Colored(desc.Length <= room ? desc : desc[..room], Palette.UnfilledBar); // description always renders flat 240
+        int truncLen = AnsiBuilder.TruncateToWidth(desc, room);
+        b.Colored(desc[..truncLen], Palette.UnfilledBar);
 
         return b.Build();
     }

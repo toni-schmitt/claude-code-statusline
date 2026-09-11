@@ -80,10 +80,18 @@ public class FormatTests
     }
 
     [Fact]
-    public void MoneyAlwaysTwoDecimals()
+    public void MoneyUsesTwoDecimalsForNormalCurrencies()
     {
         Assert.Equal("$1.00", Format.Money(1, "USD", estimate: false));
         Assert.Equal("CHF 12.40", Format.Money(12.4, "CHF", estimate: false));
+    }
+
+    [Fact]
+    public void MoneyDropsDecimalsForZeroDecimalCurrencies()
+    {
+        Assert.Equal("¥1234", Format.Money(1234, "JPY", estimate: false));
+        Assert.Equal("KRW 5000", Format.Money(5000, "KRW", estimate: false));
+        Assert.Equal("≈¥100", Format.Money(100, "JPY", estimate: true));
     }
 
     [Theory]

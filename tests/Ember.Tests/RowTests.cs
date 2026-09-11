@@ -148,6 +148,19 @@ public class RowTests
         Assert.Contains("░░░░░░░░░░", content);
     }
 
+    [Fact]
+    public void DescriptionWithSurrogatePairsDoesNotSplitThem()
+    {
+        var desc = "emoji: \U0001F600\U0001F601\U0001F602 done";
+        var content = Row.Compose(Task(description: desc), Icons, IconSet.Nerd, 60);
+        var text = StripAnsi(content);
+        for (int i = 0; i < text.Length - 1; i++)
+        {
+            if (char.IsHighSurrogate(text[i]))
+                Assert.True(char.IsLowSurrogate(text[i + 1]), "Surrogate pair was split during truncation");
+        }
+    }
+
     private static IEnumerable<int> ExtractColorCodes(string ansiText)
     {
         foreach (System.Text.RegularExpressions.Match m in
