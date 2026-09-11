@@ -180,7 +180,8 @@ public static class Program
             }
             catch
             {
-                root = new JsonObject(); // corrupt settings.json: rebuild rather than crash
+                Console.Error.WriteLine($"ember --install: {settingsPath} is not valid JSON. Fix it and retry.");
+                return;
             }
 
             root["statusLine"] = new JsonObject

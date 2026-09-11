@@ -82,7 +82,7 @@ public static class StateStore
         }
     }
 
-    /// <summary>Temp file in the same directory, then an atomic rename (§8).</summary>
+    /// <summary>Temp file in the same directory, then an atomic rename (§8). Skips the write when the serialized form hasn't changed.</summary>
     public static void Save(string path, StateFile state)
     {
         try
@@ -91,8 +91,13 @@ public static class StateStore
             if (string.IsNullOrEmpty(dir)) return;
             Directory.CreateDirectory(dir);
 
+            var json = JsonSerializer.Serialize(state, StateJsonContext.Default.StateFile);
+
+            try { if (File.Exists(path) && File.ReadAllText(path) == json) return; }
+            catch { /* can't read existing file; proceed with write */ }
+
             var tempPath = Path.Combine(dir, $".{Path.GetFileName(path)}.tmp-{Environment.ProcessId}");
-            File.WriteAllText(tempPath, JsonSerializer.Serialize(state, StateJsonContext.Default.StateFile));
+            File.WriteAllText(tempPath, json);
             File.Move(tempPath, path, overwrite: true);
         }
         catch

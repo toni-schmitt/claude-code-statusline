@@ -31,7 +31,7 @@ public static class Program
 
                 string content;
                 try { content = Row.Compose(task, icons, options.Icons, columns); }
-                catch { content = ""; } // one bad task hides only that row, never the batch (§15.4's discipline, scaled down)
+                catch { continue; } // omit the row so Claude Code keeps its default rendering
 
                 sb.Append(JsonSerializer.Serialize(
                     new SubagentRowOutput { Id = task.Id, Content = content },

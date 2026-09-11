@@ -125,13 +125,34 @@ public static class Refresher
             if (InFailureCooldown()) return;
             if (!TryAcquireLock()) return;
 
-            var psi = new ProcessStartInfo(emberPath)
+            try
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add("--refresh");
-            Process.Start(psi);
+                var psi = new ProcessStartInfo(emberPath)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    RedirectStandardInput = true,
+                };
+                psi.ArgumentList.Add("--refresh");
+                var process = Process.Start(psi);
+                if (process is not null)
+                {
+                    process.StandardOutput.Close();
+                    process.StandardError.Close();
+                    process.StandardInput.Close();
+                    process.Dispose();
+                }
+                else
+                {
+                    ReleaseLock();
+                }
+            }
+            catch
+            {
+                ReleaseLock();
+            }
         }
         catch
         {
@@ -144,13 +165,21 @@ public static class Refresher
         var lockPath = LockPath();
         try
         {
-            if (Directory.Exists(lockPath))
+            // Clean up legacy directory-based locks from previous versions.
+            try
             {
-                var age = DateTime.UtcNow - Directory.GetCreationTimeUtc(lockPath);
-                if (age.TotalSeconds < LockStaleSeconds) return false;
-                Directory.Delete(lockPath, recursive: true);
+                if (Directory.Exists(lockPath)) Directory.Delete(lockPath, true);
             }
-            Directory.CreateDirectory(lockPath);
+            catch { /* best effort */ }
+
+            if (File.Exists(lockPath))
+            {
+                var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockPath);
+                if (age.TotalSeconds < LockStaleSeconds) return false;
+                File.Delete(lockPath);
+            }
+            // FileMode.CreateNew is atomic: fails if the file already exists.
+            using var _ = new FileStream(lockPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             return true;
         }
         catch
@@ -161,7 +190,7 @@ public static class Refresher
 
     private static void ReleaseLock()
     {
-        try { Directory.Delete(LockPath(), recursive: true); } catch { /* best effort */ }
+        try { File.Delete(LockPath()); } catch { /* best effort */ }
     }
 
     /// <summary>The body of <c>--refresh</c>: fetch, then write the cache or a failure marker, then release the lock.</summary>
@@ -223,6 +252,8 @@ public static class Refresher
             var tempPath = Path.Combine(dir, $".{Path.GetFileName(path)}.tmp-{Environment.ProcessId}");
             var cache = new RefresherCache { FetchedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Usage = usage };
             File.WriteAllText(tempPath, JsonSerializer.Serialize(cache, RefresherJsonContext.Default.RefresherCache));
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(tempPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             File.Move(tempPath, path, overwrite: true);
         }
         catch

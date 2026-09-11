@@ -3,12 +3,6 @@ using System.Text.Json;
 
 namespace Ember.Core.Data;
 
-/// <summary>
-/// Reads the OAuth access token, §4.3, falling through on any failure. Only
-/// ever called from the detached refresher -- never in the render path
-/// (§12.3) -- and the token is read locally and used only against
-/// <c>api.anthropic.com</c>: never logged, cached, or echoed.
-/// </summary>
 public static class Credentials
 {
     public static string? GetAccessToken()
@@ -46,11 +40,12 @@ public static class Credentials
                 return null;
             }
 
-            return process.ExitCode == 0 && output.Length > 0 ? output : null;
+            if (process.ExitCode != 0 || output.Length == 0) return null;
+            return ParseAccessToken(output);
         }
         catch
         {
-            return null; // a keychain miss is not fatal -- some macOS installs keep the file instead (§4.3)
+            return null;
         }
     }
 
@@ -60,8 +55,19 @@ public static class Credentials
         {
             var path = Path.Combine(ConfigDir(), ".credentials.json");
             if (!File.Exists(path)) return null;
+            return ParseAccessToken(File.ReadAllText(path));
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+    internal static string? ParseAccessToken(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
             if (doc.RootElement.TryGetProperty("claudeAiOauth", out var oauth) &&
                 oauth.TryGetProperty("accessToken", out var token) &&
                 token.ValueKind == JsonValueKind.String)

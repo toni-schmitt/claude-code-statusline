@@ -28,10 +28,6 @@ public sealed record IconGlyphs(
 
 public static class Icons
 {
-    // Every glyph below is written as a \u escape rather than a literal
-    // character. The Nerd Font row is Private Use Area codepoints that are
-    // invisible or tofu outside the required font (§5.2) -- writing them
-    // literally in source is exactly the trap that table warns about.
     public static IconGlyphs For(IconSet set) => set switch
     {
         IconSet.Nerd => new IconGlyphs(

@@ -4,4 +4,8 @@
     <RootNamespace>Ember.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ember.Tests" />
+  </ItemGroup>
+
 </Project>

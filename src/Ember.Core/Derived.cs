@@ -2,20 +2,6 @@ using Ember.Core.Data;
 
 namespace Ember.Core;
 
-/// <summary>
-/// The three §7 watermark-relative computations, plus the small bookkeeping
-/// around them. Every function is pure with respect to time -- callers pass
-/// in <c>localDate</c>/<c>nowEpochSeconds</c> rather than this file reading
-/// the clock -- so the render entry point is the only place that reads
-/// wall-clock time, and this file stays unit-testable without mocking it.
-///
-/// §7.2 and §7.3 both key off "did the local day change", but they must
-/// each see that signal exactly once even though they run one after the
-/// other in the same render. <see cref="HasLocalDayChanged"/> only reads
-/// <c>account.Day</c>; <see cref="CommitLocalDay"/> is the only function
-/// that writes it, and must run after both §7.2 and §7.3 have consumed the
-/// flag (see the call order documented on <see cref="CommitLocalDay"/>).
-/// </summary>
 public static class Derived
 {
     /// <summary>Looks up or creates this session's watermark record. <paramref name="isNewSession"/> drives §7.1/§7.2's "first sight" baseline.</summary>
@@ -63,17 +49,23 @@ public static class Derived
     /// <summary>
     /// §7.2, minor units. Null when <paramref name="usedCreditsMinor"/>
     /// itself is null (credits not known this render -- the caller must
-    /// still call <see cref="CommitLocalDay"/>). <c>day_start_credits</c>
-    /// and <c>session_start_credits</c> each independently re-baseline
-    /// against their own drop check, per §7.2's wording.
+    /// still call <see cref="CommitLocalDay"/>). Watermarks use a -1
+    /// sentinel meaning "not yet baselined": the trigger (new session /
+    /// day change) marks -1 immediately, and the actual baseline fires on
+    /// the first render that has credits, even if that's a later render.
     /// </summary>
     public static (long SessionCredits, long TodayCredits)? Credits(
         AccountState account, SessionState session, bool isNewSession, bool dayChanged, long? usedCreditsMinor)
     {
+        if (dayChanged) account.DayStartCredits = -1;
+        if (isNewSession) session.SessionStartCredits = -1;
+
         if (usedCreditsMinor is not long used) return null;
 
-        if (dayChanged || used < account.DayStartCredits) account.DayStartCredits = used;
-        if (isNewSession || used < session.SessionStartCredits) session.SessionStartCredits = used;
+        if (session.SessionStartCredits < 0 || used < session.SessionStartCredits)
+            session.SessionStartCredits = used;
+        if (account.DayStartCredits < 0 || used < account.DayStartCredits)
+            account.DayStartCredits = used;
 
         return (Math.Max(0, used - session.SessionStartCredits), Math.Max(0, used - account.DayStartCredits));
     }

@@ -132,6 +132,46 @@ public class DerivedTests
     }
 
     [Fact]
+    public void CreditsBaselinesOnFirstSightNotSessionCreate()
+    {
+        var account = new AccountState();
+        var session = Derived.GetOrCreateSession(account, "s1", out var isNew);
+        Assert.True(isNew);
+
+        // Render 1: session just created, but no credits available yet.
+        var r1 = Derived.Credits(account, session, isNewSession: true, dayChanged: true, usedCreditsMinor: null);
+        Assert.Null(r1);
+
+        // Render 2: session already exists, credits arrive at 5000 (month-to-date).
+        // Without the fix, this would show 5000 as session/today credits.
+        Derived.GetOrCreateSession(account, "s1", out var isNew2);
+        Assert.False(isNew2);
+        var r2 = Derived.Credits(account, session, isNewSession: false, dayChanged: false, usedCreditsMinor: 5000);
+
+        Assert.NotNull(r2);
+        Assert.Equal((0L, 0L), r2.Value);
+        Assert.Equal(5000, session.SessionStartCredits);
+        Assert.Equal(5000, account.DayStartCredits);
+    }
+
+    [Fact]
+    public void CreditsBaselinesOnFirstSightAfterDayChange()
+    {
+        var account = new AccountState { Day = "2026-09-10", DayStartCredits = 3000 };
+        var session = new SessionState { SessionStartCredits = 3000 };
+
+        // Render on new day, but credits unavailable this render.
+        var r1 = Derived.Credits(account, session, isNewSession: false, dayChanged: true, usedCreditsMinor: null);
+        Assert.Null(r1);
+
+        // Next render (same day), credits arrive.
+        var r2 = Derived.Credits(account, session, isNewSession: false, dayChanged: false, usedCreditsMinor: 4000);
+        Assert.NotNull(r2);
+        Assert.Equal(0L, r2.Value.TodayCredits);
+        Assert.Equal(4000, account.DayStartCredits);
+    }
+
+    [Fact]
     public void AccumulateSpendEstimateSumsPositiveDeltas()
     {
         var account = new AccountState();
