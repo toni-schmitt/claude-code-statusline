@@ -73,4 +73,10 @@ public static class Format
     /// <summary>Converts a minor-unit integer (e.g. cents) to its major-unit value, §4.2.</summary>
     public static double MinorUnitsToMajor(long minorUnits, string isoCode) =>
         IsZeroDecimalCurrency(isoCode) ? minorUnits : minorUnits / 100.0;
+
+    /// <summary>Compact token count for subagent rows (§11.3's "36k" / "122k" / "0"). Not numerically specified by the design; rounds to the nearest thousand at or above 1000.</summary>
+    public static string TokenCount(long count) =>
+        count < 1000
+            ? count.ToString(CultureInfo.InvariantCulture)
+            : $"{(long)Math.Round(count / 1000.0, MidpointRounding.AwayFromZero)}k";
 }
