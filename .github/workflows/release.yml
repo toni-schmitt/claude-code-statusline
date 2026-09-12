@@ -1,0 +1,263 @@
+name: Release
+
+# Native AOT cannot cross-compile between operating systems, so each OS builds
+# on its own runner (SPEC §12.5). macOS can cross-compile between architectures,
+# so one macOS runner produces both slices of a universal binary.
+#
+# Third-party actions are pinned to commit SHAs, not tags: a tag can be moved to
+# point at new code, a commit SHA cannot. The version each SHA corresponds to is
+# in the trailing comment — update both together.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Test
+        run: dotnet test tests/Ember.Tests/Ember.Tests.csproj -c Release
+
+  build-macos:
+    name: Build macOS universal
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish osx-arm64
+        run: |
+          dotnet publish src/Ember/Ember.csproj -c Release -r osx-arm64 -p:PublishAot=true -o pub/osx-arm64
+          dotnet publish src/Ember.Subagent/Ember.Subagent.csproj -c Release -r osx-arm64 -p:PublishAot=true -o pub/osx-arm64
+
+      - name: Publish osx-x64
+        run: |
+          dotnet publish src/Ember/Ember.csproj -c Release -r osx-x64 -p:PublishAot=true -o pub/osx-x64
+          dotnet publish src/Ember.Subagent/Ember.Subagent.csproj -c Release -r osx-x64 -p:PublishAot=true -o pub/osx-x64
+
+      - name: Lipo and sign
+        # lipo invalidates any existing signature and its own output is unsigned;
+        # Apple silicon refuses to run an unsigned binary, so the ad-hoc signature
+        # is mandatory, not cosmetic (SPEC §12.5).
+        run: |
+          mkdir -p dist
+          for b in ember ember-subagent; do
+            lipo -create -output "dist/$b" "pub/osx-arm64/$b" "pub/osx-x64/$b"
+            codesign --force --sign - "dist/$b"
+          done
+
+      - name: Verify binaries
+        run: |
+          for b in ember ember-subagent; do
+            lipo -info "dist/$b"
+            lipo -info "dist/$b" | grep -q 'x86_64' || { echo "missing x86_64 slice in $b" >&2; exit 1; }
+            lipo -info "dist/$b" | grep -q 'arm64'  || { echo "missing arm64 slice in $b"  >&2; exit 1; }
+            codesign --verify --verbose=2 "dist/$b"
+          done
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh dist
+
+      - name: Tarball
+        # Only the two binaries go in: Native AOT also emits a .dSYM bundle per
+        # architecture, which would roughly double the download (SPEC §12.5).
+        run: tar -czf ember-macos-universal.tar.gz -C dist ember ember-subagent
+
+      - name: Check the tarball holds only the binaries
+        run: |
+          tar -tzf ember-macos-universal.tar.gz
+          if tar -tzf ember-macos-universal.tar.gz | grep -q 'dSYM'; then
+            echo "debug symbols leaked into the tarball" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ember-macos-universal
+          path: ember-macos-universal.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  build-linux:
+    name: Build ${{ matrix.rid }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            rid: linux-x64
+          - runner: ubuntu-24.04-arm
+            rid: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Native AOT prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish ${{ matrix.rid }}
+        run: |
+          dotnet publish src/Ember/Ember.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -o pub
+          dotnet publish src/Ember.Subagent/Ember.Subagent.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -o pub
+
+      - name: Stage binaries
+        # Copy rather than tar the publish directory: it also holds the .pdb and
+        # any debug symbols, none of which belong in the download.
+        run: |
+          mkdir -p dist
+          cp pub/ember pub/ember-subagent dist/
+          chmod +x dist/ember dist/ember-subagent
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh dist
+
+      - name: Tarball
+        run: tar -czf ember-${{ matrix.rid }}.tar.gz -C dist ember ember-subagent
+
+      - name: Check tarball contents
+        run: |
+          tar -tzf ember-${{ matrix.rid }}.tar.gz
+          test "$(tar -tzf ember-${{ matrix.rid }}.tar.gz | wc -l)" -eq 2
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ember-${{ matrix.rid }}
+          path: ember-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: [build-macos, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Check every expected asset is present
+        working-directory: dist
+        run: |
+          for f in ember-macos-universal.tar.gz ember-linux-x64.tar.gz ember-linux-arm64.tar.gz; do
+            test -f "$f" || { echo "missing release asset: $f" >&2; exit 1; }
+          done
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+          # Prove the file verifies where it will be used: from the directory
+          # holding the tarballs, exactly as a user running `shasum -a 256 -c` does.
+          sha256sum -c SHA256SUMS
+
+      - name: Publish
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: |
+            dist/ember-macos-universal.tar.gz
+            dist/ember-linux-x64.tar.gz
+            dist/ember-linux-arm64.tar.gz
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          # Any tag with a hyphen is a pre-release by semver: v0.1.0-test.1.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  update-tap:
+    name: Update Homebrew tap
+    needs: release
+    # Pre-release tags (v0.1.0-test.1) must never move the formula that real
+    # `brew install` users resolve.
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Check out the tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: toni-schmitt/homebrew-tap
+          token: ${{ secrets.TAP_TOKEN }}
+          path: tap
+          persist-credentials: true
+
+      - name: Render the formula
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          sha() { sha256sum "dist/$1" | cut -d' ' -f1; }
+          mkdir -p tap/Formula
+          sed \
+            -e "s|@@VERSION@@|${version}|g" \
+            -e "s|@@SHA_MACOS@@|$(sha ember-macos-universal.tar.gz)|g" \
+            -e "s|@@SHA_LINUX_X64@@|$(sha ember-linux-x64.tar.gz)|g" \
+            -e "s|@@SHA_LINUX_ARM64@@|$(sha ember-linux-arm64.tar.gz)|g" \
+            packaging/ember.rb.tmpl > tap/Formula/ember.rb
+          if grep -qE '@@[A-Z_]+@@' tap/Formula/ember.rb; then
+            echo "formula still contains unreplaced placeholders" >&2
+            grep -nE '@@[A-Z_]+@@' tap/Formula/ember.rb >&2
+            exit 1
+          fi
+          cat tap/Formula/ember.rb
+
+      - name: Commit and push
+        working-directory: tap
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- Formula/ember.rb; then
+            echo "Formula already up to date; nothing to push."
+            exit 0
+          fi
+          git add Formula/ember.rb
+          git commit -m "ember ${TAG#v}"
+          git push
