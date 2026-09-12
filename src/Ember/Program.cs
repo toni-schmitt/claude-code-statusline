@@ -160,13 +160,53 @@ public static class Program
         }
     }
 
+    /// <summary>
+    /// Maps a Homebrew Cellar path back to the stable symlink that points at it.
+    /// <para>
+    /// Homebrew installs into <c>&lt;prefix&gt;/Cellar/&lt;formula&gt;/&lt;version&gt;/bin</c> and links
+    /// <c>&lt;prefix&gt;/bin</c> at it. <see cref="Environment.ProcessPath"/> reports the *resolved*
+    /// path, so running <c>/opt/homebrew/bin/ember --install</c> would otherwise write the
+    /// version-pinned Cellar path into settings.json — and the next <c>brew upgrade</c> deletes
+    /// that directory, leaving Claude Code pointed at a binary that no longer exists.
+    /// </para>
+    /// <para>
+    /// The link is only trusted when it resolves back to this exact binary, so a same-named
+    /// executable from a different formula can never be written instead. Anything that is not a
+    /// Cellar path is returned unchanged.
+    /// </para>
+    /// </summary>
+    internal static string PreferStableBinPath(string exePath)
+    {
+        try
+        {
+            var full = Path.GetFullPath(exePath);
+            var name = Path.GetFileName(full);
+            if (name.Length == 0) return exePath;
+
+            var marker = $"{Path.DirectorySeparatorChar}Cellar{Path.DirectorySeparatorChar}";
+            var idx = full.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return exePath;
+
+            var candidate = Path.Combine(full[..idx], "bin", name);
+            if (!File.Exists(candidate)) return exePath;
+
+            var target = File.ResolveLinkTarget(candidate, returnFinalTarget: true)?.FullName ?? candidate;
+            return Path.GetFullPath(target) == full ? candidate : exePath;
+        }
+        catch
+        {
+            // Never let path-tidying break --install; the resolved path still works today.
+            return exePath;
+        }
+    }
+
     /// <summary>§15's install block, merging rather than overwriting. Best-effort: unconditionally overwrites only the two statusline keys, leaving the rest of settings.json untouched.</summary>
     private static void RunInstall()
     {
         try
         {
             var settingsPath = Path.Combine(Credentials.ConfigDir(), "settings.json");
-            var exePath = Environment.ProcessPath ?? "ember";
+            var exePath = PreferStableBinPath(Environment.ProcessPath ?? "ember");
             var exeDir = Path.GetDirectoryName(exePath) ?? "";
             var subagentPath = Path.Combine(exeDir, "ember-subagent");
 

@@ -12,4 +12,8 @@
     <ProjectReference Include="..\Ember.Core\Ember.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ember.Tests" />
+  </ItemGroup>
+
 </Project>
