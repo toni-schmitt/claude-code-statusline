@@ -7,24 +7,38 @@
 class Ember < Formula
   desc "Two-line status line for Claude Code, with a subagent row renderer"
   homepage "https://github.com/toni-schmitt/claude-code-statusline"
-  version "@@VERSION@@"
   license "MIT"
 
   # A formula rather than a cask: casks are macOS-only, and this covers
   # Homebrew on Linux too. It installs the prebuilt Native AOT binaries, so no
   # .NET SDK is needed on the target machine.
+  #
+  # There is no `version` stanza: Homebrew scans it from the URL, and declaring
+  # it as well trips the "redundant with version scanned from URL" audit.
+  #
+  # macOS ships ONE universal (x86_64 + arm64) tarball, so both arch blocks
+  # point at the same file. The duplication is deliberate: FormulaAudit's
+  # ComponentsOrder cop rejects `url`/`sha256` as direct children of `on_macos`,
+  # and only inspects direct children — so nesting one level down is what makes
+  # `brew audit --strict` pass.
   on_macos do
-    url "https://github.com/toni-schmitt/claude-code-statusline/releases/download/v#{version}/ember-macos-universal.tar.gz"
-    sha256 "@@SHA_MACOS@@"
+    on_arm do
+      url "https://github.com/toni-schmitt/claude-code-statusline/releases/download/v@@VERSION@@/ember-macos-universal.tar.gz"
+      sha256 "@@SHA_MACOS@@"
+    end
+    on_intel do
+      url "https://github.com/toni-schmitt/claude-code-statusline/releases/download/v@@VERSION@@/ember-macos-universal.tar.gz"
+      sha256 "@@SHA_MACOS@@"
+    end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/toni-schmitt/claude-code-statusline/releases/download/v#{version}/ember-linux-x64.tar.gz"
+      url "https://github.com/toni-schmitt/claude-code-statusline/releases/download/v@@VERSION@@/ember-linux-x64.tar.gz"
       sha256 "@@SHA_LINUX_X64@@"
     end
     on_arm do
-      url "https://github.com/toni-schmitt/claude-code-statusline/releases/download/v#{version}/ember-linux-arm64.tar.gz"
+      url "https://github.com/toni-schmitt/claude-code-statusline/releases/download/v@@VERSION@@/ember-linux-arm64.tar.gz"
       sha256 "@@SHA_LINUX_ARM64@@"
     end
   end

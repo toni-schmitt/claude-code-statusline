@@ -36,6 +36,10 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job needs the token afterwards; not
+          # persisting it keeps it out of .git/config.
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -56,6 +60,10 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job needs the token afterwards; not
+          # persisting it keeps it out of .git/config.
+          persist-credentials: false
 
       - name: Install Native AOT prerequisites
         if: runner.os == 'Linux'
@@ -68,12 +76,33 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Publish for the host platform
-        # -warnaserror turns an IL trim/AOT analyzer warning into a build
-        # failure. Those warnings are how a binary that publishes cleanly still
-        # crashes at runtime; they must not accumulate silently.
+        # The point of this job is the IL trim/AOT analyzer warnings, which
+        # appear only at publish time and are how a binary that publishes
+        # cleanly still crashes at runtime.
+        #
+        # -warnaserror is deliberately unscoped rather than a list of IL codes:
+        # the trim/AOT code range is far too large to enumerate accurately, and
+        # missing one ships a broken binary while an unrelated new warning just
+        # breaks CI loudly and is trivial to fix. Note the cost of that choice —
+        # dotnet-version floats on 10.0.x, so an SDK update that adds any new
+        # warning will fail this job.
         run: |
           dotnet publish src/Ember/Ember.csproj -c Release -p:PublishAot=true -o dist -warnaserror
           dotnet publish src/Ember.Subagent/Ember.Subagent.csproj -c Release -p:PublishAot=true -o dist -warnaserror
 
       - name: Smoke test
         run: ./scripts/smoke-test.sh dist
+
+      - name: Cross-compile check (osx-x64)
+        # The release builds osx-x64 on an arm64 runner and lipos the two
+        # together. Without this step that cross-compile is exercised only at
+        # tag time, so a regression in it would surface as a failed release
+        # rather than a failed CI run. The binary is only inspected, not run:
+        # an arm64 runner cannot be relied on to have Rosetta.
+        if: runner.os == 'macOS'
+        run: |
+          dotnet publish src/Ember/Ember.csproj -c Release -r osx-x64 -p:PublishAot=true -o dist-x64 -warnaserror
+          dotnet publish src/Ember.Subagent/Ember.Subagent.csproj -c Release -r osx-x64 -p:PublishAot=true -o dist-x64 -warnaserror
+          file dist-x64/ember dist-x64/ember-subagent
+          file dist-x64/ember | grep -q 'x86_64' || { echo "osx-x64 publish did not produce an x86_64 binary" >&2; exit 1; }
+          file dist-x64/ember-subagent | grep -q 'x86_64' || { echo "osx-x64 subagent is not x86_64" >&2; exit 1; }

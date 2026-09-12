@@ -26,8 +26,13 @@ trap 'rm -rf "$sandbox"' EXIT
 HOME="$sandbox/home"
 CLAUDE_CONFIG_DIR="$sandbox/home/.claude"
 TMPDIR="$sandbox/tmp"
+# Pin the width. The status line reads COLUMNS and sheds segments to fit, so
+# without this the assertions below depend on whatever the environment happens
+# to set: at COLUMNS=60 the `ctx` segment is dropped entirely and the test
+# would fail for a correct binary.
+COLUMNS=200
 mkdir -p "$HOME" "$CLAUDE_CONFIG_DIR" "$TMPDIR"
-export HOME CLAUDE_CONFIG_DIR TMPDIR
+export HOME CLAUDE_CONFIG_DIR TMPDIR COLUMNS
 
 ESC=$(printf '\033')
 strip_ansi() { sed "s/${ESC}\[[0-9;]*m//g"; }

@@ -31,6 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job needs the token afterwards; not
+          # persisting it keeps it out of .git/config.
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -45,6 +49,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job needs the token afterwards; not
+          # persisting it keeps it out of .git/config.
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -95,6 +103,9 @@ jobs:
             echo "debug symbols leaked into the tarball" >&2
             exit 1
           fi
+          # Same assertion the Linux legs make: exactly the two binaries, so
+          # nothing else (AppleDouble entries, stray symbols) can ride along.
+          test "$(tar -tzf ember-macos-universal.tar.gz | wc -l)" -eq 2
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -117,6 +128,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job needs the token afterwards; not
+          # persisting it keeps it out of .git/config.
+          persist-credentials: false
 
       - name: Install Native AOT prerequisites
         run: |
@@ -210,6 +225,10 @@ jobs:
     steps:
       - name: Check out this repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job needs the token afterwards; not
+          # persisting it keeps it out of .git/config.
+          persist-credentials: false
 
       - name: Download tarballs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -223,7 +242,13 @@ jobs:
           repository: toni-schmitt/homebrew-tap
           token: ${{ secrets.TAP_TOKEN }}
           path: tap
+          # Required here (unlike the checkouts above): the push at the end of
+          # this job authenticates with these persisted credentials.
           persist-credentials: true
+          # Push from a full clone rather than the default depth-1 shallow one.
+          # The tap is tiny, and this removes any question of the server
+          # rejecting a shallow push.
+          fetch-depth: 0
 
       - name: Render the formula
         env:
@@ -231,17 +256,46 @@ jobs:
         run: |
           set -euo pipefail
           version="${TAG#v}"
-          sha() { sha256sum "dist/$1" | cut -d' ' -f1; }
+          # The version is interpolated into a sed expression delimited by "|"
+          # and ends up inside the formula's URLs, so constrain the tag shape
+          # rather than trusting whatever was pushed.
+          case "$version" in
+            ''|*[!0-9A-Za-z.+-]*)
+              echo "refusing to build a formula from tag '$TAG'" >&2
+              exit 1
+              ;;
+          esac
+
+          # Assign each digest to a variable FIRST. `set -e` does not abort on a
+          # failed command substitution used as an argument, so computing these
+          # inline in the sed call would turn a missing artifact into a silent
+          # sha256 "" that the placeholder guard below cannot detect.
+          mac=$(sha256sum dist/ember-macos-universal.tar.gz | cut -d' ' -f1)
+          x64=$(sha256sum dist/ember-linux-x64.tar.gz | cut -d' ' -f1)
+          arm=$(sha256sum dist/ember-linux-arm64.tar.gz | cut -d' ' -f1)
+          for h in "$mac" "$x64" "$arm"; do
+            if [ "${#h}" -ne 64 ] || [ -n "$(printf '%s' "$h" | tr -d '0-9a-f')" ]; then
+              echo "not a sha256 digest: '$h'" >&2
+              exit 1
+            fi
+          done
+
           mkdir -p tap/Formula
           sed \
             -e "s|@@VERSION@@|${version}|g" \
-            -e "s|@@SHA_MACOS@@|$(sha ember-macos-universal.tar.gz)|g" \
-            -e "s|@@SHA_LINUX_X64@@|$(sha ember-linux-x64.tar.gz)|g" \
-            -e "s|@@SHA_LINUX_ARM64@@|$(sha ember-linux-arm64.tar.gz)|g" \
+            -e "s|@@SHA_MACOS@@|${mac}|g" \
+            -e "s|@@SHA_LINUX_X64@@|${x64}|g" \
+            -e "s|@@SHA_LINUX_ARM64@@|${arm}|g" \
             packaging/ember.rb.tmpl > tap/Formula/ember.rb
+
           if grep -qE '@@[A-Z_]+@@' tap/Formula/ember.rb; then
             echo "formula still contains unreplaced placeholders" >&2
             grep -nE '@@[A-Z_]+@@' tap/Formula/ember.rb >&2
+            exit 1
+          fi
+          # Every digest must have landed as a real 64-char hex string.
+          if [ "$(grep -cE "^[[:space:]]+sha256 \"[0-9a-f]{64}\"$" tap/Formula/ember.rb)" -ne 4 ]; then
+            echo "formula does not carry four valid sha256 digests" >&2
             exit 1
           fi
           cat tap/Formula/ember.rb
@@ -254,10 +308,14 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- Formula/ember.rb; then
+          # Stage first, then diff the index. `git diff` alone ignores untracked
+          # files, so on the very first release — when the tap has no formula
+          # yet — it would report "no changes" and skip the push, leaving a
+          # green run and a tap that cannot install anything.
+          git add Formula/ember.rb
+          if git diff --cached --quiet; then
             echo "Formula already up to date; nothing to push."
             exit 0
           fi
-          git add Formula/ember.rb
           git commit -m "ember ${TAG#v}"
           git push
