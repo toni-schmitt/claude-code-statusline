@@ -57,6 +57,7 @@ def session(
     duration_min=84.0,
     cost=0.82,
     ctx=12.0,
+    ctx_tokens=None,
     five=None,
     five_reset_min=46,
     seven=None,
@@ -74,7 +75,10 @@ def session(
     if effort is not None:
         p["effort"] = {"level": effort}
     if ctx is not None:
-        p["context_window"] = {"used_percentage": ctx}
+        cw = {"used_percentage": ctx}
+        if ctx_tokens is not None:
+            cw["total_input_tokens"] = ctx_tokens
+        p["context_window"] = cw
     limits = {}
     if five is not None:
         limits["five_hour"] = {
@@ -245,6 +249,11 @@ def typical(**kw):
                 cost=0.82, ctx=12, five=85, five_reset_min=46, seven=44,
                 seven_reset_hours=101)
     base.update(kw)
+    # Claude Code reports total_input_tokens alongside used_percentage (§3),
+    # so a realistic frame carries both. Derived from a 200k window unless the
+    # caller supplies its own token count.
+    if base.get("ctx") is not None and "ctx_tokens" not in kw:
+        base["ctx_tokens"] = round(base["ctx"] / 100 * 200_000)
     return session(**base)
 
 
@@ -411,9 +420,9 @@ FRAMES = [
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
     Frame("width-83-columns", "83: the spend slot loses its words", group="width", columns=83,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
-    Frame("width-69-columns", "69: the spend slot goes", group="width", columns=69,
+    Frame("width-76-columns", "76: line one starts shedding, beginning with ctx and its token count", group="width", columns=76,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
-    Frame("width-68-columns", "68: line one starts shedding, beginning with ctx", group="width", columns=68,
+    Frame("width-69-columns", "69: the spend slot goes", group="width", columns=69,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
     Frame("width-58-columns", "58: the session clock goes", group="width", columns=58,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),

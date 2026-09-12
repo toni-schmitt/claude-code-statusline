@@ -36,7 +36,7 @@ def main():
     s = README.read_text()
 
     hero = f'<img src="{HERO}" width="{HERO_WIDTH}" alt="{HERO_ALT}">'
-    s, n = re.subn(r'<img src="docs/previews/hero[^>]*>', hero, s, count=1)
+    s, n = re.subn(rf'<img src="{re.escape(HERO)}"[^>]*>', hero, s, count=1)
     if not n:
         raise SystemExit("hero image not found in README")
 

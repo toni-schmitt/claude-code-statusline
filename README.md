@@ -11,7 +11,7 @@ Native AOT, self-contained binary — no .NET runtime, no interpreter, nothing t
 
 ## What it shows
 
-**Line 1** — model (coloured by an ember gradient) and reasoning effort, project and git branch, session duration, context window usage.
+**Line 1** — model (coloured by an ember gradient) and reasoning effort, project and git branch, session duration, context window usage as a percentage and token count.
 
 **Line 2** — 5-hour and 7-day rate-limit usage as half-cell bars, coloured calm to critical left to right as each fills; this session's own share of the 5-hour window as a separate `+N%` figure; countdowns to each window's reset; and a spend estimate that escalates to a real credits readout, or a limit-reached banner, when it matters.
 
@@ -57,11 +57,11 @@ Context window at 91%, shortly before a compact
 
 An API-key account: no rate-limit data, so line two degrades to the spend estimate
 
-<img src="docs/previews/state-no-rate-limits.png" width="573" alt="An API-key account: no rate-limit data, so line two degrades to the spend estimate">
+<img src="docs/previews/state-no-rate-limits.png" width="633" alt="An API-key account: no rate-limit data, so line two degrades to the spend estimate">
 
 Only the 5h window reported so far, early in a session
 
-<img src="docs/previews/state-five-hour-only.png" width="603" alt="Only the 5h window reported so far, early in a session">
+<img src="docs/previews/state-five-hour-only.png" width="609" alt="Only the 5h window reported so far, early in a session">
 
 </details>
 <details>
@@ -119,15 +119,15 @@ The same session with each `--icons` value.
 
 ember-subagent: running, queued, done and failed rows
 
-<img src="docs/previews/subagent-rows.png" width="814" alt="ember-subagent: running, queued, done and failed rows">
+<img src="docs/previews/subagent-rows.png" width="829" alt="ember-subagent: running, queued, done and failed rows">
 
 The same rows with --icons=unicode
 
-<img src="docs/previews/subagent-rows-unicode.png" width="814" alt="The same rows with --icons=unicode">
+<img src="docs/previews/subagent-rows-unicode.png" width="829" alt="The same rows with --icons=unicode">
 
 The same rows with --icons=ascii
 
-<img src="docs/previews/subagent-rows-ascii.png" width="814" alt="The same rows with --icons=ascii">
+<img src="docs/previews/subagent-rows-ascii.png" width="829" alt="The same rows with --icons=ascii">
 
 Subagent rows at 80 columns: the description truncates, nothing else
 
@@ -171,7 +171,7 @@ Detached HEAD: the short SHA stands in for the branch name
 
 A long branch name, untouched: project and branch never shed on width
 
-<img src="docs/previews/line1-long-branch-name.png" width="822" alt="A long branch name, untouched: project and branch never shed on width">
+<img src="docs/previews/line1-long-branch-name.png" width="867" alt="A long branch name, untouched: project and branch never shed on width">
 
 Just after /compact, while the context reading is still absent
 
@@ -201,15 +201,15 @@ One session, shed segment by segment. Nothing wraps and nothing truncates mid-gl
 
 83: the spend slot loses its words
 
-<img src="docs/previews/width-83-columns.png" width="580" alt="83: the spend slot loses its words">
+<img src="docs/previews/width-83-columns.png" width="633" alt="83: the spend slot loses its words">
+
+76: line one starts shedding, beginning with ctx and its token count
+
+<img src="docs/previews/width-76-columns.png" width="580" alt="76: line one starts shedding, beginning with ctx and its token count">
 
 69: the spend slot goes
 
-<img src="docs/previews/width-69-columns.png" width="573" alt="69: the spend slot goes">
-
-68: line one starts shedding, beginning with ctx
-
-<img src="docs/previews/width-68-columns.png" width="494" alt="68: line one starts shedding, beginning with ctx">
+<img src="docs/previews/width-69-columns.png" width="494" alt="69: the spend slot goes">
 
 58: the session clock goes
 
@@ -261,8 +261,9 @@ Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 git clone https://github.com/toni-schmitt/claude-code-statusline.git
 cd claude-code-statusline
 
-dotnet publish -c Release -r <RID> -p:PublishAot=true src/Ember/Ember.csproj -o out
-dotnet publish -c Release -r <RID> -p:PublishAot=true src/Ember.Subagent/Ember.Subagent.csproj -o out
+RID=<RID>
+dotnet publish -c Release -r "$RID" -p:PublishAot=true src/Ember/Ember.csproj -o out
+dotnet publish -c Release -r "$RID" -p:PublishAot=true src/Ember.Subagent/Ember.Subagent.csproj -o out
 ```
 
 `<RID>` is your platform's runtime identifier: `osx-arm64`, `osx-x64`, `linux-x64`, or `linux-arm64`. This produces two self-contained native binaries — `out/ember` and `out/ember-subagent` — with no further dependencies.
@@ -321,7 +322,7 @@ Set these on the command itself, e.g. `"command": "/path/to/ember --icons=unicod
 echo '{"model":{"display_name":"Opus 5"},"effort":{"level":"xhigh"},
 "workspace":{"project_dir":"/x/claude-code-statusline","current_dir":"/x"},
 "session_id":"test","cost":{"total_cost_usd":0.82,"total_duration_ms":5040000},
-"context_window":{"used_percentage":12},
+"context_window":{"used_percentage":12,"total_input_tokens":24000},
 "rate_limits":{"five_hour":{"used_percentage":85,"resets_at":1789142400},
 "seven_day":{"used_percentage":44,"resets_at":1789574400}}}' | ./out/ember
 ```

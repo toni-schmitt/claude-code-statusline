@@ -69,13 +69,18 @@ public sealed class CostInfo
 }
 
 /// <summary>
-/// <see cref="UsedPercentage"/> may be null early in a session or right after
-/// <c>/compact</c>, until the next model call repopulates it (§3.1).
+/// <see cref="UsedPercentage"/> and <see cref="TotalInputTokens"/> may both be
+/// null early in a session or right after <c>/compact</c>, until the next
+/// model call repopulates them (§3.1).
 /// </summary>
 public sealed class ContextWindowInfo
 {
     [JsonPropertyName("used_percentage")]
     public double? UsedPercentage { get; init; }
+
+    /// <summary>Tokens currently in the context window: input + cache creation + cache reads, from the most recent API response. Same figure <see cref="UsedPercentage"/> is calculated from.</summary>
+    [JsonPropertyName("total_input_tokens")]
+    public long? TotalInputTokens { get; init; }
 }
 
 /// <summary>

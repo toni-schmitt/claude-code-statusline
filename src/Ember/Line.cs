@@ -11,7 +11,8 @@ public sealed record Line1Input(
     string ProjectName,
     string? Branch,
     TimeSpan SessionDuration,
-    double? ContextUsedPercentage);
+    double? ContextUsedPercentage,
+    long? ContextUsedTokens = null);
 
 public sealed record Line2Input(
     IconGlyphs Icons,
@@ -105,6 +106,10 @@ public static class Line
             Sep();
             b.Colored("ctx ", Palette.Label);
             b.Colored(Format.Percent(ctx), Palette.GradientStop2);
+            if (input.ContextUsedTokens is long tokens)
+            {
+                b.Colored($" ({Format.TokenCount(tokens)})", Palette.Label);
+            }
         }
 
         return b;

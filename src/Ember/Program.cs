@@ -113,7 +113,7 @@ public static class Program
             new Line1Input(
                 icons, payload.Model?.DisplayName, payload.Effort?.Level,
                 projectName, branch, TimeSpan.FromMilliseconds(payload.Cost?.TotalDurationMs ?? 0),
-                payload.ContextWindow?.UsedPercentage),
+                payload.ContextWindow?.UsedPercentage, payload.ContextWindow?.TotalInputTokens),
             columns);
 
         var line2 = Line.ComposeLine2(

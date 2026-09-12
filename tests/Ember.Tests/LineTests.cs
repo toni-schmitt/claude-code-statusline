@@ -18,9 +18,9 @@ public class LineTests
     private static readonly IconGlyphs Icons = Ember.Core.Render.Icons.For(IconSet.Nerd);
 
     private static Line1Input MakeLine1Input(
-        string? effort = "xhigh", string? branch = "main", double? ctx = 12) => new(
+        string? effort = "xhigh", string? branch = "main", double? ctx = 12, long? ctxTokens = null) => new(
         Icons, "Opus 5", effort, "claude-code-statusline", branch,
-        TimeSpan.FromMinutes(84), ctx);
+        TimeSpan.FromMinutes(84), ctx, ctxTokens);
 
     [Fact]
     public void MatchesTheSpecsOwnWorkedExampleExactly()
@@ -68,6 +68,33 @@ public class LineTests
     {
         var line1 = Line.ComposeLine1(MakeLine1Input(ctx: null), 999);
         Assert.DoesNotContain("ctx", StripAnsi(line1));
+    }
+
+    [Fact]
+    public void ContextTokensRenderParentheticallyAfterThePercentage()
+    {
+        var line1 = StripAnsi(Line.ComposeLine1(MakeLine1Input(ctx: 12, ctxTokens: 175_100), 999));
+        Assert.Contains("ctx 12% (175.1k)", line1);
+    }
+
+    [Fact]
+    public void AbsentContextTokensLeaveThePercentageBare()
+    {
+        var line1 = StripAnsi(Line.ComposeLine1(MakeLine1Input(ctx: 12, ctxTokens: null), 999));
+        Assert.Contains("ctx 12%", line1);
+        Assert.DoesNotContain("(", line1);
+    }
+
+    [Fact]
+    public void ContextTokensShedTogetherWithThePercentage()
+    {
+        var input = MakeLine1Input(ctx: 12, ctxTokens: 175_100);
+        var full = StripAnsi(Line.ComposeLine1(input, 999));
+        Assert.Contains("175.1k", full);
+
+        var narrower = StripAnsi(Line.ComposeLine1(input, full.Length - 1));
+        Assert.DoesNotContain("175.1k", narrower);
+        Assert.DoesNotContain("ctx", narrower);
     }
 
     [Fact]

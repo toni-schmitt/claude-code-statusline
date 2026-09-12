@@ -77,6 +77,28 @@ public class ProgramTests : IDisposable
     }
 
     [Fact]
+    public void MainRendersContextTokensAlongsidePercentage()
+    {
+        var payload = """
+        {
+            "session_id": "test-session",
+            "model": {"display_name": "Opus 5"},
+            "workspace": {"project_dir": "/tmp/my-project"},
+            "context_window": {"used_percentage": 15.0, "total_input_tokens": 175100}
+        }
+        """;
+        Console.SetIn(new StringReader(payload));
+        var output = new StringWriter();
+        Console.SetOut(output);
+
+        int exitCode = Ember.Program.Main([]);
+
+        Assert.Equal(0, exitCode);
+        var line1 = StripAnsi(output.ToString().Split('\n')[0]);
+        Assert.Contains("ctx 15% (175.1k)", line1);
+    }
+
+    [Fact]
     public void MainOutputsTwoLinesEvenWithEmptyStdin()
     {
         Console.SetIn(new StringReader(""));

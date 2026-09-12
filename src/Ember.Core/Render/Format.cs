@@ -96,9 +96,9 @@ public static class Format
     public static double MinorUnitsToMajor(long minorUnits, string isoCode) =>
         IsZeroDecimalCurrency(isoCode) ? minorUnits : minorUnits / 100.0;
 
-    /// <summary>Compact token count for subagent rows (§11.3's "36k" / "122k" / "0"). Not numerically specified by the design; rounds to the nearest thousand at or above 1000.</summary>
+    /// <summary>Compact token count, shared by Line 1's ctx segment (§2.1) and subagent rows (§11.3): "36.0k", "175.1k", "0". Below 1000, the plain integer rather than "0.4k".</summary>
     public static string TokenCount(long count) =>
         count < 1000
             ? count.ToString(CultureInfo.InvariantCulture)
-            : $"{(long)Math.Round(count / 1000.0, MidpointRounding.AwayFromZero)}k";
+            : $"{(count / 1000.0).ToString("F1", CultureInfo.InvariantCulture)}k";
 }

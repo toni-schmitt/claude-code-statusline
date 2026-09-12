@@ -38,7 +38,7 @@ public class RowTests
         Assert.Contains("Explore", text);
         Assert.Contains("Haiku 4.5", text);
         Assert.Contains("18%", text); // 36000/200000
-        Assert.Contains("36k", text);
+        Assert.Contains("36.0k", text);
         Assert.Contains(Palette.Fg(Palette.Branch), content); // running marker colour present somewhere
     }
 
@@ -106,7 +106,7 @@ public class RowTests
     public void NumericEffortRendersAsCompactTokenBudget()
     {
         var content = Row.Compose(Task(effortJson: "50000"), Icons, IconSet.Nerd, 100);
-        Assert.Contains("50k", StripAnsi(content));
+        Assert.Contains("50.0k", StripAnsi(content));
     }
 
     [Fact]

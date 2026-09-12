@@ -156,10 +156,12 @@ public class FormatTests
     [Theory]
     [InlineData(0, "0")]
     [InlineData(999, "999")]
-    [InlineData(36_000, "36k")]
-    [InlineData(122_000, "122k")]
-    [InlineData(1_499, "1k")]
-    public void TokenCountIsCompact(long count, string expected)
+    [InlineData(36_000, "36.0k")]
+    [InlineData(122_000, "122.0k")]
+    [InlineData(1_499, "1.5k")]
+    [InlineData(175_100, "175.1k")]
+    [InlineData(1_000, "1.0k")]
+    public void TokenCountIsCompactWithOneDecimal(long count, string expected)
     {
         Assert.Equal(expected, Format.TokenCount(count));
     }
