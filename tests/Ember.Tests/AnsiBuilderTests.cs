@@ -40,7 +40,7 @@ public class AnsiBuilderTests
     [Fact]
     public void BarCountsOneColumnPerCell()
     {
-        var cells = Meter.Render(50, null, 10);
+        var cells = Meter.Render(50, 10);
         var b = new AnsiBuilder().Bar(cells);
         Assert.Equal(10, b.Width);
     }

@@ -153,12 +153,12 @@ public static class Line
         if (input.FiveHour is { } fh)
         {
             Sep();
-            RenderWindow(b, "5h", fh, input.FiveHourShare, tier.Cells, input.Icons, showCountdown: true, input.Now);
+            RenderWindow(b, "5h", fh, tier.Cells, input.Icons, showCountdown: true, input.Now);
         }
         if (input.SevenDay is { } sd)
         {
             Sep();
-            RenderWindow(b, "7d", sd, null, tier.Cells, input.Icons, showCountdown: tier.SevenDayCountdown, input.Now);
+            RenderWindow(b, "7d", sd, tier.Cells, input.Icons, showCountdown: tier.SevenDayCountdown, input.Now);
         }
         if (input.FiveHour is not null && tier.ShowShare)
         {
@@ -177,11 +177,11 @@ public static class Line
     }
 
     private static void RenderWindow(
-        AnsiBuilder b, string label, RateLimitWindow w, double? share, int cells,
+        AnsiBuilder b, string label, RateLimitWindow w, int cells,
         IconGlyphs icons, bool showCountdown, DateTimeOffset now)
     {
         b.Colored($"{label} ", Palette.Label);
-        b.Bar(Meter.Render(w.UsedPercentage, share, cells, icons.Bar));
+        b.Bar(Meter.Render(w.UsedPercentage, cells, icons.Bar));
         b.Raw(" ");
         var (color, bold) = Palette.Severity(w.UsedPercentage);
         b.Colored(Format.Percent(w.UsedPercentage), color, bold);
@@ -189,7 +189,7 @@ public static class Line
         if (showCountdown)
         {
             var countdown = Format.Countdown(DateTimeOffset.FromUnixTimeSeconds(w.ResetsAt) - now);
-            if (countdown.Length > 0) b.Colored($" {icons.Reset}{countdown}", Palette.Label);
+            if (countdown.Length > 0) b.Colored($" {icons.Reset} {countdown}", Palette.Label);
         }
     }
 }

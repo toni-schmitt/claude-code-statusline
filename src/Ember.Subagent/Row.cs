@@ -46,10 +46,11 @@ public static class Row
         double pct = task.ContextWindowSize is long size && size > 0 && task.TokenCount is long tok
             ? Math.Clamp(100.0 * tok / size, 0, 999)
             : 0;
-        var bar = Meter.Render(pct, null, 10, icons.Bar);
+        var bar = Meter.Render(pct, 10, icons.Bar);
         if (!active) bar = Flatten(bar); // shape stays legible; severity colour never does, on a row nothing is happening in
         b.Bar(bar);
-        b.Colored($" {Format.Percent(pct)}", active ? Palette.GradientStop2 : Palette.UnfilledBar);
+        var (pctColor, pctBold) = Palette.Severity(pct);
+        b.Colored($" {Format.Percent(pct)}", active ? pctColor : Palette.UnfilledBar, active && pctBold);
         b.Colored($" {Format.TokenCount(task.TokenCount ?? 0)}", labelColor);
 
         b.Colored($" {icons.Separator} ", sepColor);

@@ -4,20 +4,19 @@ namespace Ember.Core.Render;
 public readonly record struct BarCell(char Glyph, int Color, bool Bold);
 
 /// <summary>
-/// The two-toned usage bar, §5.4. Half-divisible cells give 5% resolution;
-/// the session's own contribution ("hot") renders at the leading edge of the
-/// fill, ahead of the account's earlier usage ("base").
+/// The usage bar, §5.4. Half-divisible cells give 5% resolution. Colour is
+/// positional, not session-derived: cell <c>i</c> of <c>cells</c> covers the
+/// percentage range <c>[i, i+1) * 100/cells</c>, and is coloured by
+/// §5.5's severity bands for *that* range -- so the bar always reads calm
+/// to critical left to right as it fills, independent of which session (if
+/// any) is running. This session's own share of the window never touches
+/// the bar; it has its own segment (`+N% of 5h`).
 /// </summary>
 public static class Meter
 {
     /// <param name="usedPercentage">Window utilisation, may exceed 100.</param>
-    /// <param name="sharePercentage">
-    /// This session's share of the window (already clamped &gt;= 0 by the
-    /// caller, §7.1), or null when there is no tail to draw (e.g. the 7-day
-    /// bar, which never carries one).
-    /// </param>
     /// <param name="cells">10 normally, 5 when narrow (§13).</param>
-    public static BarCell[] Render(double usedPercentage, double? sharePercentage, int cells)
+    public static BarCell[] Render(double usedPercentage, int cells)
     {
         double perHalf = 100.0 / (2 * cells);
         int maxHalves = 2 * cells;
@@ -29,32 +28,18 @@ public static class Meter
         int occupied = (halves + 1) / 2; // ceil(halves / 2)
         bool hasHalf = halves % 2 == 1;  // the outermost occupied cell is a half
 
-        int hot = 0;
-        if (sharePercentage is double share)
-        {
-            double perCell = 100.0 / cells;
-            hot = Math.Min(occupied, RoundHalfUp(share / perCell));
-        }
-        int baseCount = occupied - hot;
-
-        var (severityColor, severityBold) = Palette.Severity(usedPercentage);
-
+        double perCell = 100.0 / cells;
         var result = new BarCell[cells];
-        int idx = 0;
 
-        for (int i = 0; i < baseCount; i++)
+        for (int i = 0; i < occupied; i++)
         {
-            bool outermost = hot == 0 && i == baseCount - 1 && hasHalf;
-            result[idx++] = new BarCell(outermost ? Half : Full, severityColor, severityBold);
+            bool outermost = i == occupied - 1 && hasHalf;
+            var (color, bold) = Palette.Severity((i + 1) * perCell);
+            result[i] = new BarCell(outermost ? Half : Full, color, bold);
         }
-        for (int i = 0; i < hot; i++)
+        for (int i = occupied; i < cells; i++)
         {
-            bool outermost = i == hot - 1 && hasHalf;
-            result[idx++] = new BarCell(outermost ? Half : Full, Palette.SessionShare, false);
-        }
-        for (; idx < cells; idx++)
-        {
-            result[idx] = new BarCell(Empty, Palette.UnfilledBar, false);
+            result[i] = new BarCell(Empty, Palette.UnfilledBar, false);
         }
 
         return result;
@@ -67,9 +52,9 @@ public static class Meter
     private const char Empty = '░';
 
     /// <summary>Same as <see cref="Render"/>, but with caller-supplied bar glyphs (§5.2's per-icon-set <see cref="BarChars"/>).</summary>
-    public static BarCell[] Render(double usedPercentage, double? sharePercentage, int cells, BarChars chars)
+    public static BarCell[] Render(double usedPercentage, int cells, BarChars chars)
     {
-        var cellsResult = Render(usedPercentage, sharePercentage, cells);
+        var cellsResult = Render(usedPercentage, cells);
         for (int i = 0; i < cellsResult.Length; i++)
         {
             var c = cellsResult[i];

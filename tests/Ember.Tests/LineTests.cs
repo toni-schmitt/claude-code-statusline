@@ -36,7 +36,7 @@ public class LineTests
     [Fact]
     public void Line2MatchesTheSpecsOwnWorkedExampleExactly()
     {
-        // Same example: 5h at 85% with a 22% session share, 7d at 44%, dim estimate slot. 99 columns.
+        // Same example: 5h at 85% with a 22% session share, 7d at 44%, dim estimate slot. 101 columns.
         var fiveHour = new RateLimitWindow { UsedPercentage = 85, ResetsAt = 47 * 60 };
         var sevenDay = new RateLimitWindow { UsedPercentage = 44, ResetsAt = 4 * 86400 + 6 * 3600 };
         var spendData = new SpendSlotData(0.82, 2.41, "USD", null, null, TimeSpan.Zero);
@@ -44,9 +44,9 @@ public class LineTests
 
         var line2 = Line.ComposeLine2(input, 999);
 
-        Assert.Equal(99, VisibleWidth(line2));
+        Assert.Equal(101, VisibleWidth(line2));
         Assert.Equal(
-            "5h ████████▌░ 85% 0h47m ❯ 7d ████▌░░░░░ 44% 4d6h ❯  +22% of 5h ❯  ≈$0.82 session · ≈$2.41 today",
+            "5h ████████▌░ 85%  0h47m ❯ 7d ████▌░░░░░ 44%  4d6h ❯  +22% of 5h ❯  ≈$0.82 session · ≈$2.41 today",
             StripAnsi(line2));
     }
 
@@ -202,19 +202,24 @@ public class LineTests
     }
 
     [Fact]
-    public void SevenDayBarNeverCarriesASessionShareTail()
+    public void NeitherBarEverCarriesTheSessionShareColour()
     {
-        // Only the 5h bar gets the ember tail (§2.2). Checked on the raw
-        // (ANSI-included) output, since the ember colour is exactly what
-        // distinguishes a hot cell from a plain severity-coloured one --
+        // Both bars are coloured purely by position/severity now (§2.2); the
+        // session's own share lives only in the `+N% of 5h` segment. Checked
+        // on the raw (ANSI-included) output, since the ember colour is
+        // exactly what a stray hot-cell override would look like --
         // stripping ANSI first would make this test unable to fail.
         var input = MakeLine2Input();
         var raw = Line.ComposeLine2(input, 999);
 
+        int fiveHourStart = raw.IndexOf("5h ", StringComparison.Ordinal);
+        string fromFiveHour = raw[fiveHourStart..];
+        string fiveHourSegment = fromFiveHour[..fromFiveHour.IndexOf('❯')];
+        Assert.DoesNotContain(Palette.Fg(Palette.SessionShare), fiveHourSegment);
+
         int sevenDayStart = raw.IndexOf("7d ", StringComparison.Ordinal);
         string fromSevenDay = raw[sevenDayStart..];
         string sevenDaySegment = fromSevenDay[..fromSevenDay.IndexOf('❯')];
-
         Assert.DoesNotContain(Palette.Fg(Palette.SessionShare), sevenDaySegment);
     }
 }
