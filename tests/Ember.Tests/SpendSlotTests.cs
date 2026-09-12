@@ -9,6 +9,7 @@ namespace Ember.Tests;
 public class SpendSlotTests
 {
     private static readonly IconGlyphs Icons = Ember.Core.Render.Icons.For(IconSet.Nerd);
+    private static readonly IconGlyphs AsciiIcons = Ember.Core.Render.Icons.For(IconSet.Ascii);
 
     private static UsageResponse Usage(bool? isEnabled, long? usedCredits = null) => new()
     {
@@ -137,5 +138,36 @@ public class SpendSlotTests
         Assert.Contains("5H LIMIT", text);
         Assert.Contains("≈$2.50 session", text);
         Assert.DoesNotContain("9.99", text); // today's figure is not shown in this state (§6.1 #3)
+    }
+
+    [Theory]
+    [InlineData(SpendSlotKind.DimEstimate)]
+    [InlineData(SpendSlotKind.AtLimit)]
+    [InlineData(SpendSlotKind.Blocked)]
+    [InlineData(SpendSlotKind.Credits)]
+    public void AsciiIconSetRendersEverySlotWithoutNonAsciiCharacters(SpendSlotKind kind)
+    {
+        // §5.2's ascii set exists for terminals that can't draw anything else,
+        // so the money figures and their separator have to fall back too --
+        // they come from §5.6's formatting, not from the icon table.
+        var data = new SpendSlotData(0.82, 2.41, "EUR", 134, 410, TimeSpan.FromMinutes(8));
+        foreach (var compact in new[] { false, true })
+        {
+            var b = new AnsiBuilder();
+            SpendSlot.Render(b, kind, data, AsciiIcons, compact);
+            var text = TestSupport.StripAnsi(b.Build());
+            Assert.True(System.Text.Ascii.IsValid(text), $"{kind} (compact: {compact}) rendered non-ASCII: {text}");
+        }
+    }
+
+    [Fact]
+    public void AsciiDimEstimateKeepsItsFiguresAndSeparator()
+    {
+        var data = new SpendSlotData(0.82, 2.41, "USD", null, null, TimeSpan.Zero);
+        var b = new AnsiBuilder();
+        SpendSlot.Render(b, SpendSlotKind.DimEstimate, data, AsciiIcons, compact: false);
+        var text = TestSupport.StripAnsi(b.Build());
+
+        Assert.Equal("$ ~$0.82 session | ~$2.41 today", text);
     }
 }

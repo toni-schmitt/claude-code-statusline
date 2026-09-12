@@ -94,6 +94,47 @@ public class FormatTests
         Assert.Equal("≈¥100", Format.Money(100, "JPY", estimate: true));
     }
 
+    [Fact]
+    public void AsciiIconSetUsesTildeForEstimates()
+    {
+        Assert.Equal("~$0.82", Format.Money(0.82, "USD", estimate: true, IconSet.Ascii));
+        Assert.Equal("$0.82", Format.Money(0.82, "USD", estimate: false, IconSet.Ascii));
+        Assert.Equal("≈$0.82", Format.Money(0.82, "USD", estimate: true, IconSet.Unicode));
+    }
+
+    [Theory]
+    [InlineData("USD", "$")]       // already ASCII: kept
+    [InlineData("BRL", "R$")]      // ditto
+    [InlineData("CAD", "CA$")]
+    [InlineData("EUR", "EUR ")]    // € is not ASCII: falls back to the code
+    [InlineData("GBP", "GBP ")]
+    [InlineData("JPY", "JPY ")]
+    public void AsciiIconSetFallsBackToCodeForNonAsciiCurrencySymbols(string iso, string expected)
+    {
+        Assert.Equal(expected, Format.CurrencyPrefix(iso, IconSet.Ascii));
+    }
+
+    [Fact]
+    public void AsciiMoneyIsEntirelyAscii()
+    {
+        foreach (var iso in new[] { "USD", "EUR", "GBP", "JPY", "BRL", "CHF" })
+        {
+            var text = Format.Money(12.4, iso, estimate: true, IconSet.Ascii);
+            Assert.True(System.Text.Ascii.IsValid(text), $"{iso} rendered non-ASCII: {text}");
+        }
+    }
+
+    [Fact]
+    public void EstimateAndDotFallBackOnlyForAscii()
+    {
+        Assert.Equal("~", Format.Estimate(IconSet.Ascii));
+        Assert.Equal("≈", Format.Estimate(IconSet.Nerd));
+        Assert.Equal("≈", Format.Estimate(IconSet.Unicode));
+        Assert.Equal("|", Format.Dot(IconSet.Ascii));
+        Assert.Equal("·", Format.Dot(IconSet.Nerd));
+        Assert.Equal("·", Format.Dot(IconSet.Unicode));
+    }
+
     [Theory]
     [InlineData("JPY", true)]
     [InlineData("KRW", true)]

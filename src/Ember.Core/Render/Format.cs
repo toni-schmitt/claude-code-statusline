@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace Ember.Core.Render;
 
@@ -53,17 +54,37 @@ public static class Format
         ["SGD"] = "S$",
     };
 
-    /// <summary>ISO currency code to display symbol, matching Claude Code's own formatter, §4.2.</summary>
-    public static string CurrencyPrefix(string isoCode) =>
-        CurrencyPrefixes.TryGetValue(isoCode, out var symbol) ? symbol : $"{isoCode.ToUpperInvariant()} ";
-
-    /// <summary>Symbol prefix, estimates prefixed "&#8776;". Zero-decimal currencies (JPY/KRW/VND) drop the fractional part.</summary>
-    public static string Money(double amount, string currencyIsoCode, bool estimate)
+    /// <summary>
+    /// ISO currency code to display symbol, matching Claude Code's own
+    /// formatter, §4.2. Under <see cref="IconSet.Ascii"/> a symbol that isn't
+    /// ASCII (&#8364;, &#163;, &#165;) falls back to the ISO code, the same
+    /// shape an unrecognised code already gets -- a set chosen because the
+    /// terminal can't render anything better shouldn't be handed a glyph it
+    /// can't draw.
+    /// </summary>
+    public static string CurrencyPrefix(string isoCode, IconSet icons = IconSet.Nerd)
     {
-        var prefix = estimate ? "≈" : "";
-        var format = IsZeroDecimalCurrency(currencyIsoCode) ? "F0" : "F2";
-        return $"{prefix}{CurrencyPrefix(currencyIsoCode)}{amount.ToString(format, CultureInfo.InvariantCulture)}";
+        if (CurrencyPrefixes.TryGetValue(isoCode, out var symbol)
+            && (icons != IconSet.Ascii || Ascii.IsValid(symbol)))
+        {
+            return symbol;
+        }
+        return $"{isoCode.ToUpperInvariant()} ";
     }
+
+    /// <summary>Symbol prefix, estimates prefixed "&#8776;" ("~" under <see cref="IconSet.Ascii"/>). Zero-decimal currencies (JPY/KRW/VND) drop the fractional part.</summary>
+    public static string Money(double amount, string currencyIsoCode, bool estimate, IconSet icons = IconSet.Nerd)
+    {
+        var prefix = estimate ? Estimate(icons) : "";
+        var format = IsZeroDecimalCurrency(currencyIsoCode) ? "F0" : "F2";
+        return $"{prefix}{CurrencyPrefix(currencyIsoCode, icons)}{amount.ToString(format, CultureInfo.InvariantCulture)}";
+    }
+
+    /// <summary>The "this is our own estimate, not a billed figure" marker, §5.6.</summary>
+    public static string Estimate(IconSet icons) => icons == IconSet.Ascii ? "~" : "≈";
+
+    /// <summary>Separates the session figure from the daily one in the spend slot.</summary>
+    public static string Dot(IconSet icons) => icons == IconSet.Ascii ? "|" : "·";
 
     /// <summary>Zero-decimal currencies, §4.2: minor-unit figures are not divided by 100.</summary>
     public static bool IsZeroDecimalCurrency(string isoCode) =>

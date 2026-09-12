@@ -77,11 +77,12 @@ public static class SpendSlot
     /// <summary>§6.1 #1 -- entirely grey 245, including its own icon.</summary>
     private static void RenderDim(AnsiBuilder b, SpendSlotData d, IconGlyphs icons, bool compact)
     {
-        var session = Format.Money(d.DimSessionUsd, "USD", estimate: true);
-        var today = Format.Money(d.DimTodayUsd, "USD", estimate: true);
+        var session = Format.Money(d.DimSessionUsd, "USD", estimate: true, icons.Set);
+        var today = Format.Money(d.DimTodayUsd, "USD", estimate: true, icons.Set);
+        var dot = Format.Dot(icons.Set);
         var text = compact
-            ? $"{icons.Spend} {session} · {today}"
-            : $"{icons.Spend} {session} session · {today} today";
+            ? $"{icons.Spend} {session} {dot} {today}"
+            : $"{icons.Spend} {session} session {dot} {today} today";
         b.Colored(text, Palette.Label);
     }
 
@@ -89,7 +90,7 @@ public static class SpendSlot
     private static void RenderAtLimit(AnsiBuilder b, SpendSlotData d, IconGlyphs icons)
     {
         b.ReverseBanner($"{icons.Blocked} 5H LIMIT", Palette.Warn).Raw(" ");
-        b.Colored($"{Format.Money(d.DimSessionUsd, "USD", estimate: true)} session", Palette.Label);
+        b.Colored($"{Format.Money(d.DimSessionUsd, "USD", estimate: true, icons.Set)} session", Palette.Label);
     }
 
     /// <summary>§6.1 #4 -- reverse video on critical (203); the countdown reuses the same reset the 5h bar shows.</summary>
@@ -108,11 +109,12 @@ public static class SpendSlot
 
         var sessionUsd = Format.MinorUnitsToMajor(d.CreditsSessionMinor ?? 0, d.CreditsCurrency);
         var todayUsd = Format.MinorUnitsToMajor(d.CreditsTodayMinor ?? 0, d.CreditsCurrency);
-        var session = Format.Money(sessionUsd, d.CreditsCurrency, estimate: false);
-        var today = Format.Money(todayUsd, d.CreditsCurrency, estimate: false);
+        var session = Format.Money(sessionUsd, d.CreditsCurrency, estimate: false, icons.Set);
+        var today = Format.Money(todayUsd, d.CreditsCurrency, estimate: false, icons.Set);
+        var dot = Format.Dot(icons.Set);
 
         b.Colored(session, Palette.GradientStop1, bold: true);
-        b.Colored(compact ? " · " : " session · ", Palette.Label);
+        b.Colored(compact ? $" {dot} " : $" session {dot} ", Palette.Label);
         b.Colored(today, Palette.GradientStop1, bold: true);
         if (!compact) b.Colored(" today", Palette.Label);
     }

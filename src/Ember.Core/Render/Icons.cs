@@ -24,7 +24,15 @@ public sealed record IconGlyphs(
     string Reset,
     string Done,
     string Separator,
-    BarChars Bar);
+    BarChars Bar)
+{
+    /// <summary>
+    /// Which set these glyphs came from. §5.6's money formatting isn't a glyph
+    /// table, but it still has non-ASCII output to fall back from, and the
+    /// call sites all hold one of these rather than an <see cref="IconSet"/>.
+    /// </summary>
+    public IconSet Set { get; init; }
+}
 
 public static class Icons
 {
@@ -43,7 +51,7 @@ public static class Icons
             Reset: "",    // refresh
             Done: "",     // check
             Separator: "❯", // not in §5.2's icon table; Menlo and JetBrainsMono both carry it
-            Bar: new BarChars(Full: '█', Half: '▌', Empty: '░')),
+            Bar: new BarChars(Full: '█', Half: '▌', Empty: '░')) { Set = IconSet.Nerd },
 
         IconSet.Unicode => new IconGlyphs(
             Model: "◆",    // diamond
@@ -58,7 +66,7 @@ public static class Icons
             Reset: "↺",    // anticlockwise open circle arrow
             Done: "✔",     // heavy check mark
             Separator: "❯",
-            Bar: new BarChars(Full: '█', Half: '▌', Empty: '░')),
+            Bar: new BarChars(Full: '█', Half: '▌', Empty: '░')) { Set = IconSet.Unicode },
 
         IconSet.Ascii => new IconGlyphs(
             Model: "*",
@@ -73,7 +81,7 @@ public static class Icons
             Reset: "~",
             Done: "x",
             Separator: ">", // no ASCII equivalent specified for the separator; kept single-width and consistent with the other markers
-            Bar: new BarChars('#', '+', '-')), // no half-block in ASCII; '+' stands in for the half cell
+            Bar: new BarChars('#', '+', '-')) { Set = IconSet.Ascii }, // no half-block in ASCII; '+' stands in for the half cell
 
         _ => throw new ArgumentOutOfRangeException(nameof(set)),
     };
