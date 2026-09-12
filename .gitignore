@@ -1,11 +1,17 @@
-# Spec (design doc, not part of the shipped project)
+# Spec and distribution plan (working docs, not part of the shipped project)
 /SPEC.md
+/DISTRIBUTION.md
 
 # .NET build artifacts
 bin/
 obj/
 out/
 *.user
+*.binlog
+
+# Release staging (CI builds tarballs here)
+artifacts/
+dist/
 
 # OS cruft
 .DS_Store
@@ -14,6 +20,10 @@ out/
 .vs/
 .vscode/
 *.swp
+.idea/
+
+# Local agent settings (machine-specific, never shared)
+.claude/settings.local.json
 
 # Status line preview build artifacts (regenerate with tools/preview)
 tools/preview/build/
