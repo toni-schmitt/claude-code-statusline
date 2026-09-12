@@ -1,5 +1,8 @@
 # Ember
 
+[![CI](https://github.com/toni-schmitt/claude-code-statusline/actions/workflows/ci.yml/badge.svg)](https://github.com/toni-schmitt/claude-code-statusline/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A two-line status line for [Claude Code](https://code.claude.com), plus a companion renderer for subagent rows. Line one is who and where. Line two is what it's costing you.
 
 <img src="docs/statusline.png" width="900" alt="The Ember status line in a live Claude Code session, with its subagent rows beneath it">
@@ -227,12 +230,32 @@ One session, shed segment by segment. Nothing wraps and nothing truncates mid-gl
 ### Prerequisites
 
 - macOS or Linux (Native AOT supports Windows too, but distribution here targets only these two platforms)
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) to build from source
 - A [Nerd Font](https://www.nerdfonts.com) in your terminal for the default icon set — e.g. `brew install --cask font-jetbrains-mono-nerd-font`, then select *JetBrainsMono Nerd Font* in your terminal. Without one, pass `--icons=unicode` (works with the preinstalled Menlo on macOS) or `--icons=ascii`.
+
+Nothing else. The binaries are self-contained: no .NET runtime on the target machine, and a .NET SDK only if you choose to build from source.
+
+### Homebrew
+
+```sh
+brew install toni-schmitt/tap/ember
+```
+
+Works on macOS (a universal binary, Apple silicon and Intel) and on Homebrew for Linux (x86-64 and arm64).
+
+### Download a release
+
+Grab the tarball for your platform from [Releases](https://github.com/toni-schmitt/claude-code-statusline/releases), verify it, and put both binaries on your `PATH`:
+
+```sh
+tar -xzf ember-macos-universal.tar.gz    # or ember-linux-x64 / ember-linux-arm64
+shasum -a 256 -c SHA256SUMS              # SHA256SUMS is attached to each release
+mkdir -p ~/.local/bin
+mv ember ember-subagent ~/.local/bin/
+```
 
 ### Build from source
 
-There's no published release yet, so building from source is the way to install this today:
+Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```sh
 git clone https://github.com/toni-schmitt/claude-code-statusline.git
