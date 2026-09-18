@@ -35,7 +35,7 @@ public static class Row
             var effortText = DescribeEffort(task.Effort);
             if (effortText is { Length: > 0 })
             {
-                b.Colored($" {icons.Effort}", labelColor);
+                b.Colored($" {icons.Effort} ", labelColor);
                 b.Colored(effortText, active ? Palette.GradientStop6 : Palette.UnfilledBar);
             }
         }

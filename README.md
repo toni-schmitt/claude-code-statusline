@@ -59,11 +59,11 @@ Context window at 91%, shortly before a compact
 
 An API-key account: no rate-limit data, so line two degrades to the spend estimate
 
-<img src="docs/previews/state-no-rate-limits.png" width="633" alt="An API-key account: no rate-limit data, so line two degrades to the spend estimate">
+<img src="docs/previews/state-no-rate-limits.png" width="641" alt="An API-key account: no rate-limit data, so line two degrades to the spend estimate">
 
 Only the 5h window reported so far, early in a session
 
-<img src="docs/previews/state-five-hour-only.png" width="609" alt="Only the 5h window reported so far, early in a session">
+<img src="docs/previews/state-five-hour-only.png" width="617" alt="Only the 5h window reported so far, early in a session">
 
 </details>
 <details>
@@ -137,19 +137,19 @@ The same session with each `--icons` value.
 
 ember-subagent: running, queued, done and failed rows
 
-<img src="docs/previews/subagent-rows.png" width="829" alt="ember-subagent: running, queued, done and failed rows">
+<img src="docs/previews/subagent-rows.png" width="837" alt="ember-subagent: running, queued, done and failed rows">
 
 The same rows with --icons=unicode
 
-<img src="docs/previews/subagent-rows-unicode.png" width="829" alt="The same rows with --icons=unicode">
+<img src="docs/previews/subagent-rows-unicode.png" width="837" alt="The same rows with --icons=unicode">
 
 The same rows with --icons=ascii
 
-<img src="docs/previews/subagent-rows-ascii.png" width="829" alt="The same rows with --icons=ascii">
+<img src="docs/previews/subagent-rows-ascii.png" width="837" alt="The same rows with --icons=ascii">
 
 Subagent rows at 80 columns: the description truncates, nothing else
 
-<img src="docs/previews/subagent-rows-narrow.png" width="658" alt="Subagent rows at 80 columns: the description truncates, nothing else">
+<img src="docs/previews/subagent-rows-narrow.png" width="657" alt="Subagent rows at 80 columns: the description truncates, nothing else">
 
 </details>
 <details>
@@ -219,27 +219,23 @@ One session, shed segment by segment. Nothing wraps and nothing truncates mid-gl
 
 83: the spend slot loses its words
 
-<img src="docs/previews/width-83-columns.png" width="633" alt="83: the spend slot loses its words">
+<img src="docs/previews/width-83-columns.png" width="641" alt="83: the spend slot loses its words">
 
-76: line one starts shedding, beginning with ctx and its token count
+77: line one starts shedding, beginning with ctx and its token count
 
-<img src="docs/previews/width-76-columns.png" width="580" alt="76: line one starts shedding, beginning with ctx and its token count">
+<img src="docs/previews/width-77-columns.png" width="580" alt="77: line one starts shedding, beginning with ctx and its token count">
 
 69: the spend slot goes
 
-<img src="docs/previews/width-69-columns.png" width="494" alt="69: the spend slot goes">
+<img src="docs/previews/width-69-columns.png" width="502" alt="69: the spend slot goes">
 
-58: the session clock goes
+59: the session clock goes
 
-<img src="docs/previews/width-58-columns.png" width="423" alt="58: the session clock goes">
+<img src="docs/previews/width-59-columns.png" width="424" alt="59: the session clock goes">
 
-49: the session's share of the 5h window goes
+49: reasoning effort goes, and the session's share of the 5h window with it — project and branch never shed on width
 
-<img src="docs/previews/width-49-columns.png" width="416" alt="49: the session's share of the 5h window goes">
-
-48: reasoning effort goes — project and branch never shed on width
-
-<img src="docs/previews/width-48-columns.png" width="361" alt="48: reasoning effort goes — project and branch never shed on width">
+<img src="docs/previews/width-49-columns.png" width="361" alt="49: reasoning effort goes, and the session's share of the 5h window with it — project and branch never shed on width">
 
 </details>
 

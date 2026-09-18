@@ -76,7 +76,7 @@ public static class Line
             b.Gradient(model, Gradient.ForText(model));
             if (tier.ShowEffort && input.EffortLevel is { Length: > 0 } effort)
             {
-                b.Colored($" {input.Icons.Effort}", Palette.Label);
+                b.Colored($" {input.Icons.Effort} ", Palette.Label);
                 b.Colored(effort, Palette.GradientStop6);
             }
             wrote = true;

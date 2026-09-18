@@ -25,11 +25,11 @@ public class LineTests
     [Fact]
     public void MatchesTheSpecsOwnWorkedExampleExactly()
     {
-        // §2's headline example, reproduced byte-for-byte: 69 columns.
+        // §2's headline example, reproduced byte-for-byte: 70 columns.
         var line1 = Line.ComposeLine1(MakeLine1Input(), 999);
-        Assert.Equal(69, VisibleWidth(line1));
+        Assert.Equal(70, VisibleWidth(line1));
         Assert.Equal(
-            " Opus 5 xhigh ❯  claude-code-statusline  main ❯  1h24m ❯ ctx 12%",
+            " Opus 5  xhigh ❯  claude-code-statusline  main ❯  1h24m ❯ ctx 12%",
             StripAnsi(line1));
     }
 

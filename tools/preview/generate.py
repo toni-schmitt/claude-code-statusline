@@ -439,15 +439,13 @@ FRAMES = [
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
     Frame("width-83-columns", "83: the spend slot loses its words", group="width", columns=83,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
-    Frame("width-76-columns", "76: line one starts shedding, beginning with ctx and its token count", group="width", columns=76,
+    Frame("width-77-columns", "77: line one starts shedding, beginning with ctx and its token count", group="width", columns=77,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
     Frame("width-69-columns", "69: the spend slot goes", group="width", columns=69,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
-    Frame("width-58-columns", "58: the session clock goes", group="width", columns=58,
+    Frame("width-59-columns", "59: the session clock goes", group="width", columns=59,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
-    Frame("width-49-columns", "49: the session's share of the 5h window goes", group="width", columns=49,
-          steps=with_history(typical(), prior_today=2.59, share_from=63)),
-    Frame("width-48-columns", "48: reasoning effort goes — project and branch never shed on width", group="width", columns=48,
+    Frame("width-49-columns", "49: reasoning effort goes, and the session's share of the 5h window with it — project and branch never shed on width", group="width", columns=49,
           steps=with_history(typical(), prior_today=2.59, share_from=63)),
 
     # ---- subagent rows ---------------------------------------------------
