@@ -16,7 +16,7 @@ SECTIONS = [
     ("state-", "Everyday states",
      "A Max account at various points in a session."),
     ("spend-", "The spend slot",
-     "Its four states, in the order you'd meet them."),
+     "Its five tenants, in the order you'd meet them."),
     ("icons-", "Icon sets",
      "The same session with each `--icons` value."),
     ("subagent-", "Subagent rows",

@@ -15,6 +15,8 @@ Native AOT, self-contained binary — no .NET runtime, no interpreter, nothing t
 
 **Line 2** — 5-hour and 7-day rate-limit usage as half-cell bars, coloured calm to critical left to right as each fills; this session's own share of the 5-hour window as a separate `+N%` figure; countdowns to each window's reset; and a spend estimate that escalates to a real credits readout, or a limit-reached banner, when it matters.
 
+Either window can trigger that escalation — a full weekly window stops work just as a full 5-hour one does — and the banner names the window you are actually waiting on, counting down to *its* reset. Once a session has been billed for extra usage, it keeps reporting what it really cost even after the window rolls over and the banner stands down.
+
 On an API key or any account without Claude's rate-limit data, line 1 is unaffected and line 2 degrades gracefully to just the spend estimate. On a narrow terminal, both lines shed segments in a defined order rather than wrapping or truncating mid-glyph.
 
 The companion (`ember-subagent`) renders the same grammar, narrower, for each subagent row Claude Code shows while a task is running.
@@ -67,7 +69,7 @@ Only the 5h window reported so far, early in a session
 <details>
 <summary><b>The spend slot</b></summary>
 
-Its four states, in the order you'd meet them.
+Its five tenants, in the order you'd meet them.
 
 The default: a dim, self-measured estimate of session and daily spend
 
@@ -81,9 +83,25 @@ The default: a dim, self-measured estimate of session and daily spend
 
 <img src="docs/previews/spend-limit-reached.png" width="822" alt="5h window exhausted and extra usage is switched off: nothing to do but wait">
 
+The weekly window exhausted while the 5h one is barely touched: the banner names the window you are waiting on
+
+<img src="docs/previews/spend-seven-day-limit.png" width="798" alt="The weekly window exhausted while the 5h one is barely touched: the banner names the window you are waiting on">
+
+The weekly window exhausted with extra usage switched off: the countdown runs to the weekly reset, not the 5h one
+
+<img src="docs/previews/spend-seven-day-limit-reached.png" width="830" alt="The weekly window exhausted with extra usage switched off: the countdown runs to the weekly reset, not the 5h one">
+
 Past the 5h window on extra usage: real credit figures replace the estimate
 
 <img src="docs/previews/spend-credits.png" width="885" alt="Past the 5h window on extra usage: real credit figures replace the estimate">
+
+Past the weekly window on extra usage: the 5h window has plenty of room, but credits are what is paying for the work
+
+<img src="docs/previews/spend-credits-weekly.png" width="885" alt="Past the weekly window on extra usage: the 5h window has plenty of room, but credits are what is paying for the work">
+
+Back under every cap after a window rolled over: what the session really cost stays, without the banner
+
+<img src="docs/previews/spend-credits-after-rollover.png" width="798" alt="Back under every cap after a window rolled over: what the session really cost stays, without the banner">
 
 The same credits readout for a euro-billed account
 

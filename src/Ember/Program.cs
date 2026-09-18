@@ -99,15 +99,12 @@ public static class Program
         Derived.CommitLocalDay(account, localDate);
         Derived.TouchAndPruneSessions(account, sessionId, nowUtc.ToUnixTimeSeconds());
 
-        var fiveHourPct = payload.RateLimits?.FiveHour?.UsedPercentage;
-        var kind = SpendSlot.Determine(fiveHourPct, usage);
-        var fiveHourRemaining = payload.RateLimits?.FiveHour is { } fh
-            ? DateTimeOffset.FromUnixTimeSeconds(fh.ResetsAt) - nowUtc
-            : TimeSpan.Zero;
+        var binding = SpendSlot.Binding(payload.RateLimits, nowUtc);
+        var kind = SpendSlot.Determine(binding, usage, creditsResult?.SessionCredits);
         var currency = usage?.ExtraUsage?.Currency ?? "USD";
         var spendData = new SpendSlotData(
             totalCostUsd, account.TodayEstimateUsd, currency,
-            creditsResult?.SessionCredits, creditsResult?.TodayCredits, fiveHourRemaining);
+            creditsResult?.SessionCredits, creditsResult?.TodayCredits, binding);
 
         var line1 = Line.ComposeLine1(
             new Line1Input(

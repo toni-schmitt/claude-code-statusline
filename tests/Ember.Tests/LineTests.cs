@@ -39,7 +39,7 @@ public class LineTests
         // Same example: 5h at 85% with a 22% session share, 7d at 44%, dim estimate slot. 101 columns.
         var fiveHour = new RateLimitWindow { UsedPercentage = 85, ResetsAt = 47 * 60 };
         var sevenDay = new RateLimitWindow { UsedPercentage = 44, ResetsAt = 4 * 86400 + 6 * 3600 };
-        var spendData = new SpendSlotData(0.82, 2.41, "USD", null, null, TimeSpan.Zero);
+        var spendData = new SpendSlotData(0.82, 2.41, "USD", null, null, Binding: null);
         var input = new Line2Input(Icons, fiveHour, sevenDay, 22, DateTimeOffset.FromUnixTimeSeconds(0), SpendSlotKind.DimEstimate, spendData);
 
         var line2 = Line.ComposeLine2(input, 999);
@@ -166,7 +166,7 @@ public class LineTests
         22,
         DateTimeOffset.FromUnixTimeSeconds(0),
         SpendSlotKind.DimEstimate,
-        new SpendSlotData(0.82, 2.41, "USD", null, null, TimeSpan.Zero));
+        new SpendSlotData(0.82, 2.41, "USD", null, null, Binding: null));
 
     private static int CountBarGlyphs(string text) => text.Count(c => c is '█' or '▌' or '░');
 
