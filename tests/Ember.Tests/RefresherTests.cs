@@ -120,6 +120,22 @@ public class RefresherTests : IDisposable
     }
 
     [Fact]
+    public void LastFailureIsNullWithoutAMarker()
+    {
+        Assert.Null(Refresher.LastFailure());
+    }
+
+    [Fact]
+    public void LastFailureReportsWhatTheMarkerRecorded()
+    {
+        File.WriteAllText(Refresher.CachePath() + ".fail", "2026-09-19T21:44:02Z http-401: Unauthorized\n");
+
+        var failure = Refresher.LastFailure();
+
+        Assert.Equal("2026-09-19T21:44:02Z http-401: Unauthorized", failure);
+    }
+
+    [Fact]
     public void MissingFailMarkerMeansNoCooldown()
     {
         Assert.False(Refresher.InFailureCooldown());

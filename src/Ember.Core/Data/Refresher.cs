@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -245,16 +246,23 @@ public static class Refresher
         try { File.Delete(LockPath()); } catch { /* best effort */ }
     }
 
-    /// <summary>The body of <c>--refresh</c>: fetch, then write the cache or a failure marker, then release the lock.</summary>
-    public static async Task RunAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// The body of <c>--refresh</c>: fetch, then write the cache or a failure
+    /// marker, then release the lock. Returns null on success, otherwise the
+    /// reason the fetch failed, as recorded in the marker.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the fetch; a cancelled fetch counts as a failure like any other.</param>
+    public static async Task<string?> RunAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             var token = Credentials.GetAccessToken();
             if (token is null)
             {
-                WriteFailMarker();
-                return;
+                // Distinct from a rejected token: nothing was found to send.
+                // On macOS that is usually the keychain denying `security`,
+                // not a signed-out user (§4.3).
+                return WriteFailMarker("no-token: no access token in the keychain or credentials file");
             }
 
             using var client = new HttpClient();
@@ -265,26 +273,33 @@ public static class Refresher
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
             using var response = await client.GetAsync(UsageEndpoint, linked.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode is false)
             {
-                WriteFailMarker(); // never cache an error body (rule 5)
-                return;
+                // The status code only: an error body may echo request detail,
+                // and nothing from an error response is ever kept (rule 5).
+                return WriteFailMarker($"http-{(int)response.StatusCode}: {response.StatusCode}");
             }
 
             await using var body = await response.Content.ReadAsStreamAsync(linked.Token).ConfigureAwait(false);
             var usage = await JsonSerializer.DeserializeAsync(body, UsageJsonContext.Default.UsageResponse, linked.Token).ConfigureAwait(false);
             if (usage is null)
             {
-                WriteFailMarker();
-                return;
+                return WriteFailMarker("empty-body: the endpoint returned JSON null");
             }
 
             WriteCache(usage);
             ClearFailMarker();
+            return null;
         }
-        catch
+        catch (OperationCanceledException)
         {
-            WriteFailMarker();
+            // The linked source fires on both the caller's token and the
+            // §10 rule 6 budget, and a socket timeout surfaces the same way.
+            return WriteFailMarker($"timeout: no response within {ConnectTimeoutSeconds + ReadTimeoutSeconds}s");
+        }
+        catch (Exception ex)
+        {
+            return WriteFailMarker($"{ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -314,9 +329,43 @@ public static class Refresher
         }
     }
 
-    private static void WriteFailMarker()
+    /// <summary>
+    /// Records <paramref name="reason"/> in the failure marker and returns it.
+    /// <para>
+    /// The marker's mtime is what rule 4's cooldown reads; its contents exist
+    /// purely so a person can find out why. Without them every failure mode —
+    /// a keychain that will not open, an expired token, a 429, a dead network —
+    /// looks identical from outside, and the line's only symptom is figures
+    /// that quietly stop moving. Never holds a token or a response body.
+    /// </para>
+    /// </summary>
+    /// <param name="reason">A single line: a short kind, a colon, then detail.</param>
+    /// <returns><paramref name="reason"/>, unchanged, so callers can return it directly.</returns>
+    private static string WriteFailMarker(string reason)
     {
-        try { File.WriteAllText(FailMarkerPath(), ""); } catch { /* best effort */ }
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        try { File.WriteAllText(FailMarkerPath(), $"{stamp} {reason}\n"); } catch { /* best effort */ }
+        return reason;
+    }
+
+    /// <summary>
+    /// The last recorded failure, whole line including its timestamp, or null
+    /// when the marker is absent or empty. Diagnostic only — no render path
+    /// reads it (§9.3).
+    /// </summary>
+    public static string? LastFailure()
+    {
+        try
+        {
+            var path = FailMarkerPath();
+            if (!File.Exists(path)) return null;
+            var text = File.ReadAllText(path).Trim();
+            return text.Length is 0 ? null : text;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void ClearFailMarker()

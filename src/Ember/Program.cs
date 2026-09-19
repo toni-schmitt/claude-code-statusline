@@ -17,8 +17,7 @@ public static class Program
             switch (options.Mode)
             {
                 case EmberMode.Refresh:
-                    Refresher.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
-                    return 0;
+                    return RunRefresh();
                 case EmberMode.Install:
                     RunInstall();
                     return 0;
@@ -34,6 +33,22 @@ public static class Program
             Console.Out.Write("ember: render error\n\n");
             return 0;
         }
+    }
+
+    /// <summary>
+    /// <c>--refresh</c>, §10. Reports the failure on stderr and exits non-zero
+    /// so running it by hand answers "why are the credit figures not moving?".
+    /// The detached spawns that normally drive it close stderr and ignore the
+    /// exit code, so this is visible to a person and to nobody else.
+    /// </summary>
+    /// <returns>A process exit code: 0 when the cache was refreshed, 1 when it was not.</returns>
+    private static int RunRefresh()
+    {
+        var failure = Refresher.RunAsync().GetAwaiter().GetResult();
+        if (failure is null) return 0;
+
+        try { Console.Error.WriteLine($"ember --refresh: {failure}"); } catch { /* stderr is closed when detached */ }
+        return 1;
     }
 
     private static void RunRender(Options options)
