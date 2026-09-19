@@ -79,6 +79,18 @@ public class RefresherTests : IDisposable
     }
 
     [Fact]
+    public void ReadCacheAcceptsAFractionalMinorUnitAmount()
+    {
+        // The endpoint spells `used_credits` as a float: 4849.0, not 4849.
+        WriteCacheSecure(Refresher.CachePath(),
+            """{"fetched_at_ms":0,"usage":{"extra_usage":{"is_enabled":true,"used_credits":4849.0,"currency":"EUR"}}}""");
+
+        var usage = Refresher.ReadCache();
+
+        Assert.Equal(4849, usage!.ExtraUsage!.UsedCredits);
+    }
+
+    [Fact]
     public void MissingFailMarkerMeansNoCooldown()
     {
         Assert.False(Refresher.InFailureCooldown());
