@@ -79,6 +79,35 @@ public class RefresherTests : IDisposable
     }
 
     [Fact]
+    public void ACacheWithinTheMaxAgeIsStillReadEvenWhenStale()
+    {
+        // Past the 45s TTL a refresh is due, but the figures on screen are
+        // still the best evidence available and keep their slot.
+        var path = Refresher.CachePath();
+        WriteCacheSecure(path, """{"fetched_at_ms":0,"usage":{"extra_usage":{"is_enabled":false}}}""");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+
+        var usage = Refresher.ReadCache();
+
+        Assert.False(usage!.ExtraUsage!.IsEnabled);
+    }
+
+    [Fact]
+    public void ACacheBeyondTheMaxAgeReadsAsAbsent()
+    {
+        // §10 rule 7: an hours-old `is_enabled: false` means the refresher has
+        // been failing for hours, not that credits are off. Degrading it to
+        // unknown is what keeps §6 off the `LIMIT REACHED` banner.
+        var path = Refresher.CachePath();
+        WriteCacheSecure(path, """{"fetched_at_ms":0,"usage":{"extra_usage":{"is_enabled":false}}}""");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(-601));
+
+        var usage = Refresher.ReadCache();
+
+        Assert.Null(usage);
+    }
+
+    [Fact]
     public void ReadCacheAcceptsAFractionalMinorUnitAmount()
     {
         // The endpoint spells `used_credits` as a float: 4849.0, not 4849.

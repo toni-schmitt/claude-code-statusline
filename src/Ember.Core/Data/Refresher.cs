@@ -32,6 +32,28 @@ public partial class RefresherJsonContext : JsonSerializerContext
 public static class Refresher
 {
     private const int TtlSeconds = 45;
+
+    /// <summary>
+    /// How long a cached response stays ground truth, §10 rule 7. Beyond the
+    /// TTL the cache is merely due for a refresh and is still served; beyond
+    /// this it is no longer evidence of anything and reads as absent.
+    /// <para>
+    /// The two cannot be one number. The TTL has to be short enough to keep
+    /// the figures current, and serving nothing that recently would blank the
+    /// slot on every network hiccup. But a refresh that fails keeps failing
+    /// only 120s later (<see cref="FailureCooldownSeconds"/>), so an hours-old
+    /// cache means the refresher has been failing continuously — and a
+    /// <c>is_enabled: false</c> from that far back is a guess, not a fact. It
+    /// drives §6's choice between the at-limit and blocked banners, and only
+    /// the blocked one asserts that work has stopped.
+    /// </para>
+    /// <para>
+    /// Ten minutes is §4.4's bound on Claude Code's own snapshot, applied to
+    /// our cache for the same reason: past it, credit status is unknown.
+    /// </para>
+    /// </summary>
+    private const int MaxAgeSeconds = 600;
+
     private const int LockStaleSeconds = 60;
     private const int FailureCooldownSeconds = 120;
     private const int ConnectTimeoutSeconds = 2;
@@ -49,13 +71,21 @@ public static class Refresher
     private static string LockPath() => CachePath() + ".lock";
     private static string FailMarkerPath() => CachePath() + ".fail";
 
-    /// <summary>Reads the cache, or null if it is absent, unsafe, or unparseable.</summary>
+    /// <summary>
+    /// Reads the cache, or null if it is absent, unsafe, unparseable, or older
+    /// than <see cref="MaxAgeSeconds"/>. Ageing out reads as absent rather than
+    /// as its own state so every caller inherits the cold-cache behaviour it
+    /// already handles: §6 degrades credit status to <c>unknown</c>, and
+    /// Program falls back to Claude Code's §4.4 snapshot, which may be fresher
+    /// than what the refresher last managed to fetch.
+    /// </summary>
     public static UsageResponse? ReadCache()
     {
         var path = CachePath();
         try
         {
             if (!IsSafeToRead(path)) return null;
+            if (AgeSeconds(path) is not double age || age > MaxAgeSeconds) return null;
             var cache = JsonSerializer.Deserialize(File.ReadAllText(path), RefresherJsonContext.Default.RefresherCache);
             return cache?.Usage;
         }
@@ -67,31 +97,33 @@ public static class Refresher
 
     public static bool IsStale()
     {
-        try
-        {
-            var path = CachePath();
-            if (!File.Exists(path)) return true;
-            var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
-            return age.TotalSeconds > TtlSeconds;
-        }
-        catch
-        {
-            return true;
-        }
+        var age = AgeSeconds(CachePath());
+        return age is not double seconds || seconds > TtlSeconds;
     }
 
     public static bool InFailureCooldown()
     {
+        var age = AgeSeconds(FailMarkerPath());
+        return age is double seconds && seconds < FailureCooldownSeconds;
+    }
+
+    /// <summary>
+    /// Seconds since <paramref name="path"/> was last written, or null when it
+    /// does not exist or cannot be stat'd. Last-write time rather than the
+    /// cache's own <c>fetched_at_ms</c>: the cache is replaced wholesale by an
+    /// atomic rename on every successful fetch, so the two agree, and one
+    /// clock source keeps the TTL, the max age and the cooldown comparable.
+    /// </summary>
+    private static double? AgeSeconds(string path)
+    {
         try
         {
-            var path = FailMarkerPath();
-            if (!File.Exists(path)) return false;
-            var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
-            return age.TotalSeconds < FailureCooldownSeconds;
+            if (!File.Exists(path)) return null;
+            return (DateTime.UtcNow - File.GetLastWriteTimeUtc(path)).TotalSeconds;
         }
         catch
         {
-            return false;
+            return null;
         }
     }
 
