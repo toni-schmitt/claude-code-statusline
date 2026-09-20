@@ -9,22 +9,27 @@ public enum EmberMode
     Install,
 }
 
-/// <summary>Flags on the command in settings.json, §15.1. Unknown flags are ignored, not fatal.</summary>
-public sealed record Options(IconSet Icons, bool GitDirty, bool WeeklyPerModel, EmberMode Mode)
+/// <summary>
+/// Flags on the command in settings.json, §15.1. Unknown flags are ignored,
+/// not fatal.
+/// <para>
+/// Only what a person must decide before the binary runs belongs here. Which
+/// segments line 2 carries is not that: §15.5 puts it in the settings block
+/// <c>--install</c> writes, where it survives a reinstall and can be revisited
+/// without editing a command string by hand.
+/// </para>
+/// </summary>
+public sealed record Options(IconSet Icons, EmberMode Mode)
 {
     public static Options Parse(string[] args)
     {
         var icons = IconSet.Nerd;
-        var gitDirty = false;
-        var weeklyPerModel = false;
         var mode = EmberMode.Render;
 
         foreach (var arg in args)
         {
             if (arg == "--refresh") { mode = EmberMode.Refresh; continue; }
             if (arg == "--install") { mode = EmberMode.Install; continue; }
-            if (arg == "--git-dirty") { gitDirty = true; continue; } // reserved (§14.1); no behaviour wired up yet
-            if (arg == "--weekly-per-model") { weeklyPerModel = true; continue; } // reserved (§14.2); ditto
 
             if (arg.StartsWith("--icons=", StringComparison.Ordinal))
             {
@@ -41,6 +46,6 @@ public sealed record Options(IconSet Icons, bool GitDirty, bool WeeklyPerModel, 
             // anything else: ignored, not fatal (§15.1)
         }
 
-        return new Options(icons, gitDirty, weeklyPerModel, mode);
+        return new Options(icons, mode);
     }
 }

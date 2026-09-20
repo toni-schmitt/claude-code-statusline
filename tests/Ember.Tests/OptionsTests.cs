@@ -13,8 +13,6 @@ public class OptionsTests
         var options = Options.Parse([]);
         Assert.Equal(IconSet.Nerd, options.Icons);
         Assert.Equal(EmberMode.Render, options.Mode);
-        Assert.False(options.GitDirty);
-        Assert.False(options.WeeklyPerModel);
     }
 
     [Theory]
@@ -45,14 +43,6 @@ public class OptionsTests
     }
 
     [Fact]
-    public void GitDirtyAndWeeklyPerModelAreRecognisedAsReservedFlags()
-    {
-        var options = Options.Parse(["--git-dirty", "--weekly-per-model"]);
-        Assert.True(options.GitDirty);
-        Assert.True(options.WeeklyPerModel);
-    }
-
-    [Fact]
     public void UnknownFlagsAreIgnoredNotFatal()
     {
         var options = Options.Parse(["--bogus-flag", "--another=thing", "not-a-flag-at-all"]);
@@ -63,9 +53,8 @@ public class OptionsTests
     [Fact]
     public void FlagsCombineFreely()
     {
-        var options = Options.Parse(["--icons=ascii", "--git-dirty", "--unknown"]);
+        var options = Options.Parse(["--icons=ascii", "--refresh", "--unknown"]);
         Assert.Equal(IconSet.Ascii, options.Icons);
-        Assert.True(options.GitDirty);
-        Assert.Equal(EmberMode.Render, options.Mode);
+        Assert.Equal(EmberMode.Refresh, options.Mode);
     }
 }

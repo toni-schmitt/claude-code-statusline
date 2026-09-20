@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -6,10 +7,13 @@ namespace Ember.Core.Data;
 /// <summary>
 /// The undocumented usage API contract, §4.1. Transcribed from the response
 /// validator inside the Claude Code binary. Every object is permissive:
-/// unknown fields (including the whole <c>limits[]</c> array) are ignored
-/// rather than rejected -- <c>limits[]</c> duplicates the same numbers as
-/// <c>percent</c> that the named top-level objects carry as
-/// <c>utilization</c>, and nothing here consumes it (§4.1).
+/// unknown fields are ignored rather than rejected.
+/// <para>
+/// For every window that has a named top-level object, <c>limits[]</c> only
+/// repeats as <c>percent</c> what that object already carries as
+/// <c>utilization</c>. It is read for the one thing it carries alone: §5.7's
+/// per-model weekly windows, which have no top-level object of their own.
+/// </para>
 /// </summary>
 public sealed class UsageResponse
 {
@@ -33,6 +37,10 @@ public sealed class UsageResponse
 
     [JsonPropertyName("extra_usage")]
     public ExtraUsage? ExtraUsage { get; init; }
+
+    /// <summary>Per-scope breakdowns. Only the §5.7 rows are read; see <see cref="UsageLimit"/>.</summary>
+    [JsonPropertyName("limits")]
+    public List<UsageLimit>? Limits { get; init; }
 }
 
 public sealed class UsageWindow
@@ -114,6 +122,95 @@ public sealed class MinorUnitsJsonConverter : JsonConverter<long?>
     public override void Write(Utf8JsonWriter writer, long? value, JsonSerializerOptions options)
     {
         if (value.HasValue) writer.WriteNumberValue(value.Value);
+        else writer.WriteNullValue();
+    }
+}
+
+/// <summary>
+/// One <c>limits[]</c> row. Only <c>weekly_scoped</c> rows are read, for
+/// §5.7's per-model weekly windows; every other <c>kind</c> repeats a window
+/// that already has a named top-level object.
+/// </summary>
+public sealed class UsageLimit
+{
+    /// <summary>Which window the row describes. Observed: <c>session</c>, <c>weekly_all</c>, <c>weekly_scoped</c>.</summary>
+    [JsonPropertyName("kind")]
+    public string? Kind { get; init; }
+
+    /// <summary>Utilisation 0-100 -- the same scale as <see cref="UsageWindow.Utilization"/>, and may exceed 100.</summary>
+    [JsonPropertyName("percent")]
+    public double? Percent { get; init; }
+
+    /// <summary>When the window rolls over, or null when the endpoint reports no reset for it.</summary>
+    [JsonPropertyName("resets_at")]
+    [JsonConverter(typeof(ResetsAtJsonConverter))]
+    public DateTimeOffset? ResetsAt { get; init; }
+
+    /// <summary>What the row is narrowed to; null on the plan-wide rows. Only <c>model</c> is read, never <c>surface</c>.</summary>
+    [JsonPropertyName("scope")]
+    public UsageLimitScope? Scope { get; init; }
+}
+
+/// <summary>The narrowing on a <see cref="UsageLimit"/>.</summary>
+public sealed class UsageLimitScope
+{
+    /// <summary>The model bucket, present on <c>weekly_scoped</c> rows.</summary>
+    [JsonPropertyName("model")]
+    public UsageLimitModel? Model { get; init; }
+}
+
+/// <summary>The model bucket a <c>weekly_scoped</c> row belongs to.</summary>
+public sealed class UsageLimitModel
+{
+    /// <summary>Server-supplied label, e.g. <c>Fable</c>. The row's only usable identifier -- its sibling <c>id</c> arrives null.</summary>
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; init; }
+}
+
+/// <summary>
+/// A <c>limits[]</c> reset instant, accepted whether the endpoint spells it
+/// as an ISO 8601 string or as epoch seconds.
+/// <para>
+/// ISO 8601 is what the endpoint is observed to send, but Claude Code's own
+/// projection of these rows branches on <c>typeof resets_at === "number"</c>,
+/// so both spellings reach a reader in practice. A strict string read throws
+/// on the numeric one, and §10 rule 5 keeps nothing from a failed response --
+/// so one unexpected token here would cost the credit figures too, not just
+/// the window it appeared in.
+/// </para>
+/// <para>
+/// An unparseable or out-of-range value reads as null, which §5.7 already
+/// treats as "no reset to count down to" rather than as an error.
+/// </para>
+/// </summary>
+public sealed class ResetsAtJsonConverter : JsonConverter<DateTimeOffset?>
+{
+    /// <inheritdoc/>
+    public override DateTimeOffset? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType is JsonTokenType.Null) return null;
+
+        if (reader.TokenType is JsonTokenType.Number)
+        {
+            if (reader.TryGetInt64(out var epochSeconds) is false) return null;
+            if (epochSeconds < DateTimeOffset.MinValue.ToUnixTimeSeconds()) return null;
+            if (epochSeconds > DateTimeOffset.MaxValue.ToUnixTimeSeconds()) return null;
+            return DateTimeOffset.FromUnixTimeSeconds(epochSeconds);
+        }
+
+        if (reader.TokenType is not JsonTokenType.String)
+            throw new JsonException($"expected a string or a number for a reset instant, got {reader.TokenType}");
+
+        return DateTimeOffset.TryParse(
+            reader.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    /// <inheritdoc/>
+    public override void Write(Utf8JsonWriter writer, DateTimeOffset? value, JsonSerializerOptions options)
+    {
+        if (value.HasValue) writer.WriteStringValue(value.Value);
         else writer.WriteNullValue();
     }
 }

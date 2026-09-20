@@ -40,7 +40,7 @@ public class LineTests
         var fiveHour = new RateLimitWindow { UsedPercentage = 85, ResetsAt = 47 * 60 };
         var sevenDay = new RateLimitWindow { UsedPercentage = 44, ResetsAt = 4 * 86400 + 6 * 3600 };
         var spendData = new SpendSlotData(0.82, 2.41, "USD", null, null, Binding: null);
-        var input = new Line2Input(Icons, fiveHour, sevenDay, 22, DateTimeOffset.FromUnixTimeSeconds(0), SpendSlotKind.DimEstimate, spendData);
+        var input = new Line2Input(Icons, fiveHour, sevenDay, [], 22, DateTimeOffset.FromUnixTimeSeconds(0), SpendSlotKind.DimEstimate, spendData);
 
         var line2 = Line.ComposeLine2(input, 999);
 
@@ -159,14 +159,19 @@ public class LineTests
         Assert.Contains("main", noEffort);
     }
 
-    private static Line2Input MakeLine2Input(bool withRateLimits = true) => new(
+    private static Line2Input MakeLine2Input(
+        bool withRateLimits = true, IReadOnlyList<ModelWindow>? modelWindows = null) => new(
         Icons,
         withRateLimits ? new RateLimitWindow { UsedPercentage = 85, ResetsAt = 2820 } : null,
         withRateLimits ? new RateLimitWindow { UsedPercentage = 44, ResetsAt = 364800 } : null,
+        modelWindows ?? [],
         22,
         DateTimeOffset.FromUnixTimeSeconds(0),
         SpendSlotKind.DimEstimate,
         new SpendSlotData(0.82, 2.41, "USD", null, null, Binding: null));
+
+    private static readonly ModelWindow Fable =
+        new("fable", 37, DateTimeOffset.FromUnixTimeSeconds(2 * 86400 + 6 * 3600));
 
     private static int CountBarGlyphs(string text) => text.Count(c => c is '█' or '▌' or '░');
 
@@ -212,6 +217,72 @@ public class LineTests
         // Tier 6: the share segment drops too -- the narrowest tier.
         var noShare = StripAnsi(Line.ComposeLine2(input, t5Width - 1));
         Assert.DoesNotContain("of 5h", noShare);
+    }
+
+    [Fact]
+    public void PerModelWindowRendersInTheSameGrammarAfterTheWeeklyOne()
+    {
+        var line2 = StripAnsi(Line.ComposeLine2(MakeLine2Input(modelWindows: [Fable]), 999));
+
+        Assert.Equal(30, CountBarGlyphs(line2)); // 5h, 7d and fable, ten cells each
+        Assert.Contains("fable ███▌░░░░░░ 37%", line2);
+        Assert.True(
+            line2.IndexOf("7d ", StringComparison.Ordinal) < line2.IndexOf("fable ", StringComparison.Ordinal),
+            "the per-model window follows the plan-wide weekly one");
+        Assert.True(
+            line2.IndexOf("fable ", StringComparison.Ordinal) < line2.IndexOf("of 5h", StringComparison.Ordinal),
+            "the per-model window precedes the session share");
+    }
+
+    [Fact]
+    public void PerModelCountdownIsTheFirstThingShed()
+    {
+        var input = MakeLine2Input(modelWindows: [Fable]);
+
+        var full = StripAnsi(Line.ComposeLine2(input, 999));
+        Assert.Contains("2d6h", full); // fable's own reset
+        Assert.Contains("4d5h", full); // the 7d reset, still present
+
+        var shed = StripAnsi(Line.ComposeLine2(input, full.Length - 1));
+        Assert.DoesNotContain("2d6h", shed);
+        Assert.Contains("4d5h", shed);
+        Assert.Contains("fable", shed);
+        Assert.Equal(30, CountBarGlyphs(shed)); // the bar itself survives its countdown
+    }
+
+    [Fact]
+    public void PerModelWindowDropsBeforeTheSpendSlotDoes()
+    {
+        var input = MakeLine2Input(modelWindows: [Fable]);
+
+        // Walk the ladder down until the fable segment goes, and check the
+        // spend slot is still whole when it does -- §13.1 sheds the API-sourced
+        // garnish before the figures the line exists to carry.
+        string rendered = StripAnsi(Line.ComposeLine2(input, 999));
+        while (rendered.Contains("fable") && rendered.Length > 1)
+        {
+            rendered = StripAnsi(Line.ComposeLine2(input, rendered.Length - 1));
+        }
+
+        Assert.DoesNotContain("fable", rendered);
+        Assert.Contains("+22% of 5h", rendered);
+        Assert.Contains("0.82", rendered);
+    }
+
+    [Fact]
+    public void WithoutPerModelWindowsTheLadderIsUnchanged()
+    {
+        // The §5.7 tiers are additive. An account whose payload carries no
+        // model-scoped row must shed at exactly the widths it always did.
+        var input = MakeLine2Input();
+
+        foreach (int columns in new[] { 999, 101, 99, 95, 93, 85, 83, 70, 69, 55, 49, 40 })
+        {
+            var line2 = StripAnsi(Line.ComposeLine2(input, columns));
+            Assert.DoesNotContain("fable", line2);
+        }
+
+        Assert.Equal(101, VisibleWidth(Line.ComposeLine2(input, 999)));
     }
 
     [Fact]

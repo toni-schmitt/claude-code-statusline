@@ -15,6 +15,8 @@ Native AOT, self-contained binary — no .NET runtime, no interpreter, nothing t
 
 **Line 2** — 5-hour and 7-day rate-limit usage as half-cell bars, coloured calm to critical left to right as each fills; this session's own share of the 5-hour window as a separate `+N%` figure; countdowns to each window's reset; and a spend estimate that escalates to a real credits readout, or a limit-reached banner, when it matters.
 
+Plans that carry a dedicated weekly allowance for one model — Fable on Max — get a bar of their own beside the other two, labelled with the model's name and appearing once that allowance is actually in use. These come from the usage endpoint rather than from Claude Code, so they are additive: they never replace the 7-day bar, and they are the first thing to shed when the terminal narrows.
+
 Either window can trigger that escalation — a full weekly window stops work just as a full 5-hour one does — and the banner names the window you are actually waiting on, counting down to *its* reset. Once a session has been billed for extra usage, it keeps reporting what it really cost even after the window rolls over and the banner stands down.
 
 On an API key or any account without Claude's rate-limit data, line 1 is unaffected and line 2 degrades gracefully to just the spend estimate. On a narrow terminal, both lines shed segments in a defined order rather than wrapping or truncating mid-glyph.
@@ -325,10 +327,12 @@ Set these on the command itself, e.g. `"command": "/path/to/ember --icons=unicod
 | Flag | Default | Effect |
 |---|---|---|
 | `--icons=nerd\|unicode\|ascii` | `nerd` | Icon set |
-| `--git-dirty` | off | Reserved for a future git dirty-flags feature; currently a no-op |
-| `--weekly-per-model` | off | Reserved for future per-model weekly rate-limit windows; currently a no-op |
 | `--refresh` | — | Runs the detached usage-cache refresh; not for `settings.json` |
 | `--install` | — | Writes the settings block above into `settings.json` |
+
+Every segment is on by default. Turning individual segments off is planned for
+`--install` itself — it will ask, store the answers in `settings.json`, leave them
+alone on later runs, and ask again only about segments a new release has added.
 
 ### Trying it without a live session
 

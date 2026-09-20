@@ -114,6 +114,8 @@ public static class Program
         Derived.CommitLocalDay(account, localDate);
         Derived.TouchAndPruneSessions(account, sessionId, nowUtc.ToUnixTimeSeconds());
 
+        var modelWindows = ModelWindows.From(usage);
+
         var binding = SpendSlot.Binding(payload.RateLimits, nowUtc);
         var kind = SpendSlot.Determine(binding, usage, creditsResult?.SessionCredits);
         var currency = usage?.ExtraUsage?.Currency ?? "USD";
@@ -131,7 +133,7 @@ public static class Program
         var line2 = Line.ComposeLine2(
             new Line2Input(
                 icons, payload.RateLimits?.FiveHour, payload.RateLimits?.SevenDay,
-                share, nowUtc, kind, spendData),
+                modelWindows, share, nowUtc, kind, spendData),
             columns);
 
         // Both lines are fully built strings before anything is written, so

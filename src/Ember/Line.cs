@@ -18,6 +18,7 @@ public sealed record Line2Input(
     IconGlyphs Icons,
     RateLimitWindow? FiveHour,
     RateLimitWindow? SevenDay,
+    IReadOnlyList<ModelWindow> ModelWindows,
     double? FiveHourShare,
     DateTimeOffset Now,
     SpendSlotKind SpendKind,
@@ -117,18 +118,26 @@ public static class Line
 
     private enum SpendVisibility { Full, Compact, Hidden }
 
-    private readonly record struct Line2Tier(bool SevenDayCountdown, int Cells, SpendVisibility Spend, bool ShowShare);
+    private readonly record struct Line2Tier(
+        bool ModelCountdown, bool SevenDayCountdown, int Cells, SpendVisibility Spend, bool ShowShare, bool ShowModels);
 
-    // §13.1, in shed order: 7d countdown -> bars halve to 5 cells -> spend
-    // slot loses its words -> spend slot drops -> share segment drops.
+    // §13.1, in shed order: per-model countdowns -> 7d countdown -> bars halve
+    // -> per-model windows -> spend slot loses its words -> spend slot drops
+    // -> share segment drops.
+    //
+    // The per-model tiers are additive: with no §5.7 windows to render, tier 0
+    // measures the same as tier 1 and tier 3 the same as tier 4, so an account
+    // without them sheds exactly as it did before they existed.
     private static readonly Line2Tier[] Line2Tiers =
     [
-        new(true, 10, SpendVisibility.Full, true),
-        new(false, 10, SpendVisibility.Full, true),
-        new(false, 5, SpendVisibility.Full, true),
-        new(false, 5, SpendVisibility.Compact, true),
-        new(false, 5, SpendVisibility.Hidden, true),
-        new(false, 5, SpendVisibility.Hidden, false),
+        new(true, true, 10, SpendVisibility.Full, true, true),
+        new(false, true, 10, SpendVisibility.Full, true, true),
+        new(false, false, 10, SpendVisibility.Full, true, true),
+        new(false, false, 5, SpendVisibility.Full, true, true),
+        new(false, false, 5, SpendVisibility.Full, true, false),
+        new(false, false, 5, SpendVisibility.Compact, true, false),
+        new(false, false, 5, SpendVisibility.Hidden, true, false),
+        new(false, false, 5, SpendVisibility.Hidden, false, false),
     ];
 
     public static string ComposeLine2(Line2Input input, int columns)
@@ -158,12 +167,23 @@ public static class Line
         if (input.FiveHour is { } fh)
         {
             Sep();
-            RenderWindow(b, "5h", fh, tier.Cells, input.Icons, showCountdown: true, input.Now);
+            RenderWindow(b, "5h", fh.UsedPercentage, DateTimeOffset.FromUnixTimeSeconds(fh.ResetsAt),
+                tier.Cells, input.Icons, showCountdown: true, input.Now);
         }
         if (input.SevenDay is { } sd)
         {
             Sep();
-            RenderWindow(b, "7d", sd, tier.Cells, input.Icons, showCountdown: tier.SevenDayCountdown, input.Now);
+            RenderWindow(b, "7d", sd.UsedPercentage, DateTimeOffset.FromUnixTimeSeconds(sd.ResetsAt),
+                tier.Cells, input.Icons, showCountdown: tier.SevenDayCountdown, input.Now);
+        }
+        if (tier.ShowModels)
+        {
+            foreach (var model in input.ModelWindows)
+            {
+                Sep();
+                RenderWindow(b, model.Label, model.UsedPercentage, model.ResetsAt,
+                    tier.Cells, input.Icons, showCountdown: tier.ModelCountdown, input.Now);
+            }
         }
         if (input.FiveHour is not null && tier.ShowShare)
         {
@@ -181,20 +201,26 @@ public static class Line
         return b;
     }
 
+    /// <summary>
+    /// One labelled bar, percentage and countdown. Takes the figures rather
+    /// than a window type so stdin's epoch-second windows (§3) and the API's
+    /// per-model ones (§5.7) render through one grammar, as §2.2 requires.
+    /// </summary>
+    /// <param name="resetsAt">Null when the source reported no reset; the countdown is then omitted.</param>
     private static void RenderWindow(
-        AnsiBuilder b, string label, RateLimitWindow w, int cells,
-        IconGlyphs icons, bool showCountdown, DateTimeOffset now)
+        AnsiBuilder b, string label, double usedPercentage, DateTimeOffset? resetsAt,
+        int cells, IconGlyphs icons, bool showCountdown, DateTimeOffset now)
     {
         b.Colored($"{label} ", Palette.Label);
-        b.Bar(Meter.Render(w.UsedPercentage, cells, icons.Bar));
+        b.Bar(Meter.Render(usedPercentage, cells, icons.Bar));
         b.Raw(" ");
-        var (color, bold) = Palette.Severity(w.UsedPercentage);
-        b.Colored(Format.Percent(w.UsedPercentage), color, bold);
+        var (color, bold) = Palette.Severity(usedPercentage);
+        b.Colored(Format.Percent(usedPercentage), color, bold);
 
-        if (showCountdown)
-        {
-            var countdown = Format.Countdown(DateTimeOffset.FromUnixTimeSeconds(w.ResetsAt) - now);
-            if (countdown.Length > 0) b.Colored($" {icons.Reset} {countdown}", Palette.Label);
-        }
+        if (showCountdown is false) return;
+        if (resetsAt is not DateTimeOffset reset) return;
+
+        var countdown = Format.Countdown(reset - now);
+        if (countdown.Length > 0) b.Colored($" {icons.Reset} {countdown}", Palette.Label);
     }
 }
