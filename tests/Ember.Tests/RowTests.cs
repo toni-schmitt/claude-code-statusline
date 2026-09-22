@@ -56,6 +56,24 @@ public class RowTests
     }
 
     [Fact]
+    public void KilledRowRendersLikeAFailedOne()
+    {
+        var killed = Row.Compose(Task(status: "killed", name: "risky-task"), Icons, IconSet.Nerd, 100);
+        var failed = Row.Compose(Task(status: "failed", name: "risky-task"), Icons, IconSet.Nerd, 100);
+        Assert.Equal(failed, killed);
+    }
+
+    [Theory]
+    [InlineData("paused")]
+    [InlineData("pending")]
+    public void PausedAndPendingRowsUseTheQueuedMarker(string status)
+    {
+        var row = StripAnsi(Row.Compose(Task(status: status), Icons, IconSet.Nerd, 100));
+        var queued = StripAnsi(Row.Compose(Task(status: "queued"), Icons, IconSet.Nerd, 100));
+        Assert.Equal(queued[0], row[0]);
+    }
+
+    [Fact]
     public void QueuedRowWithNonzeroUsageRendersEntirelyFlat()
     {
         // Regression test: an earlier version only flattened the name, leaving

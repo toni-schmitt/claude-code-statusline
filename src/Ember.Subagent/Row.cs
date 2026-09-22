@@ -17,7 +17,9 @@ public static class Row
     public static string Compose(SubagentTask task, IconGlyphs icons, IconSet iconSet, int columns)
     {
         var b = new AnsiBuilder();
-        bool active = task.Status is SubagentStatus.Running or SubagentStatus.Failed; // §11.3: queued/done render flat 240
+        // §11.3: queued/done render flat 240. A killed task ended as abnormally
+        // as a failed one, so it keeps the failed row's full palette.
+        bool active = task.Status is SubagentStatus.Running or SubagentStatus.Failed or SubagentStatus.Killed;
         int labelColor = active ? Palette.Label : Palette.UnfilledBar;
         int sepColor = active ? Palette.Separator : Palette.UnfilledBar;
 
@@ -108,9 +110,9 @@ public static class Row
     private static (string Glyph, int Color) MarkerFor(SubagentStatus status, IconSet set, IconGlyphs icons) => status switch
     {
         SubagentStatus.Running => (set == IconSet.Ascii ? "*" : "●", Palette.Branch),
-        SubagentStatus.Failed => (set == IconSet.Ascii ? "*" : "●", Palette.Critical),
+        SubagentStatus.Failed or SubagentStatus.Killed => (set == IconSet.Ascii ? "*" : "●", Palette.Critical),
         SubagentStatus.Completed => (icons.Done, Palette.UnfilledBar),
-        _ => (set == IconSet.Ascii ? "." : "○", Palette.UnfilledBar), // pending / paused / killed / unknown
+        _ => (set == IconSet.Ascii ? "." : "○", Palette.UnfilledBar), // pending / paused / unknown
     };
 
     private static string? DescribeEffort(JsonElement effort) => effort.ValueKind switch
