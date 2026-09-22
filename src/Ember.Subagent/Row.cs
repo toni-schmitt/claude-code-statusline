@@ -14,6 +14,33 @@ namespace Ember.Subagent;
 /// </summary>
 public static class Row
 {
+    private readonly record struct RowTier(bool ShowEffort, int Cells, bool ShowTokens, bool ShowModel);
+
+    // §13's approach on a row, in shed order: bar halves to 5 cells -> effort
+    // -> token count -> model. The bar goes first because its shape is coarse
+    // information at either length; the model goes last because it is what a
+    // row is most often read for. The headline is elastic, so a tier is kept
+    // as long as it leaves the headline at least HeadlineFloor columns (or its
+    // full width, when shorter); the next tier is tried only when it does not.
+    private static readonly RowTier[] Tiers =
+    [
+        new(true, 10, true, true),
+        new(true, 5, true, true),
+        new(false, 5, true, true),
+        new(false, 5, false, true),
+        new(false, 5, false, false),
+    ];
+
+    // A whole short description such as "Probe model-opus-4-8" is what the
+    // metrics give way for; cutting it to a prefix would leave sibling rows
+    // indistinguishable.
+    private const int HeadlineFloor = 20;
+
+    // A named row's trailing description is dropped, separator and all, once
+    // it would be cut to fewer columns than this: "/cod" identifies nothing
+    // and the separator costs three columns of its own.
+    private const int TailFloor = 8;
+
     public static string Compose(SubagentTask task, IconGlyphs icons, IconSet iconSet, int columns)
     {
         var b = new AnsiBuilder();
@@ -25,11 +52,6 @@ public static class Row
 
         var (marker, markerColor) = MarkerFor(task.Status, iconSet, icons);
         b.Colored($"{marker} ", markerColor);
-
-        // The metrics are composed before the text that precedes them, so the
-        // headline can be fitted to whatever width they leave over.
-        var metrics = new AnsiBuilder();
-        AppendMetrics(metrics, task, icons, active, labelColor, sepColor);
 
         // Only agents spawned with an explicit name carry `name`; a plain
         // Agent-tool spawn arrives as `type: "local_agent"`, which says
@@ -50,13 +72,24 @@ public static class Row
             tail = "";
         }
 
+        // The metrics are composed before the text that precedes them, so the
+        // headline can be fitted to whatever width they leave over.
+        int floor = Math.Min(AnsiBuilder.DisplayWidth(headline), HeadlineFloor);
+        var metrics = ComposeMetrics(task, Tiers[0], icons, active, labelColor, sepColor);
+        for (int i = 1; i < Tiers.Length && columns - b.Width - metrics.Width < floor; i++)
+        {
+            metrics = ComposeMetrics(task, Tiers[i], icons, active, labelColor, sepColor);
+        }
+
         headline = Fit(headline, columns - b.Width - metrics.Width);
         if (active) b.Gradient(headline, Gradient.ForText(headline)); else b.Colored(headline, Palette.UnfilledBar);
         b.Append(metrics);
 
-        // The separator is only worth its columns when text follows it.
+        // The separator is only worth its columns when enough text follows it.
         var separator = $" {icons.Separator} ";
-        tail = Fit(tail, columns - b.Width - AnsiBuilder.DisplayWidth(separator));
+        int tailRoom = columns - b.Width - AnsiBuilder.DisplayWidth(separator);
+        if (tailRoom < Math.Min(AnsiBuilder.DisplayWidth(tail), TailFloor)) return b.Build();
+        tail = Fit(tail, tailRoom);
         if (tail.Length is 0) return b.Build();
 
         b.Colored(separator, sepColor);
@@ -67,15 +100,16 @@ public static class Row
     /// <summary>The longest prefix of <paramref name="text"/> that fits in <paramref name="room"/> columns; empty when no room is left.</summary>
     private static string Fit(string text, int room) => text[..AnsiBuilder.TruncateToWidth(text, Math.Max(0, room))];
 
-    /// <summary>The model, effort and context segments that follow the name.</summary>
-    private static void AppendMetrics(AnsiBuilder b, SubagentTask task, IconGlyphs icons, bool active, int labelColor, int sepColor)
+    /// <summary>The model, effort and context segments that follow the name, at one tier of the ladder.</summary>
+    private static AnsiBuilder ComposeMetrics(SubagentTask task, RowTier tier, IconGlyphs icons, bool active, int labelColor, int sepColor)
     {
-        if (task.Model is { Length: > 0 } modelId)
+        var b = new AnsiBuilder();
+        if (tier.ShowModel && task.Model is { Length: > 0 } modelId)
         {
             b.Colored($" {icons.Model} ", labelColor);
             b.Colored(ModelNames.Resolve(modelId), active ? Palette.GradientStop2 : Palette.UnfilledBar);
 
-            var effortText = DescribeEffort(task.Effort);
+            var effortText = tier.ShowEffort ? DescribeEffort(task.Effort) : null;
             if (effortText is { Length: > 0 })
             {
                 b.Colored($" {icons.Effort} ", labelColor);
@@ -89,12 +123,13 @@ public static class Row
         double pct = task.ContextWindowSize is long size && size > 0 && task.TokenCount is long tok
             ? Math.Clamp(100.0 * tok / size, 0, 999)
             : 0;
-        var bar = Meter.Render(pct, 10, icons.Bar);
+        var bar = Meter.Render(pct, tier.Cells, icons.Bar);
         if (!active) bar = Flatten(bar); // shape stays legible; severity colour never does, on a row nothing is happening in
         b.Bar(bar);
         var (pctColor, pctBold) = Palette.Severity(pct);
         b.Colored($" {Format.Percent(pct)}", active ? pctColor : Palette.UnfilledBar, active && pctBold);
-        b.Colored($" {Format.TokenCount(task.TokenCount ?? 0)}", labelColor);
+        if (tier.ShowTokens) b.Colored($" {Format.TokenCount(task.TokenCount ?? 0)}", labelColor);
+        return b;
     }
 
     private static BarCell[] Flatten(BarCell[] cells)

@@ -270,6 +270,94 @@ public class RowTests
         Assert.Contains("ctx", StripAnsi(content)); // the metrics survive; the name is what gives way
     }
 
+    // The unnamed fixture below is 20 columns of headline; with model "Opus 4.8",
+    // effort "high" and a 10-cell bar the metrics take 45 columns, so the row
+    // needs 67 columns before anything sheds.
+    private static SubagentTask Probe() =>
+        Task(name: null, type: "local_agent", description: "Probe model-opus-4-8", model: "claude-opus-4-8",
+            effortJson: "\"high\"", contextWindowSize: 200_000, tokenCount: 36_000);
+
+    [Fact]
+    public void WideRowShedsNothing()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 67));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.Contains("high", text);
+        Assert.Contains("░░░░░░░░", text); // 10-cell bar, 18% filled
+        Assert.Contains("36.0k", text);
+    }
+
+    [Fact]
+    public void BarHalvesBeforeTheHeadlineIsCut()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 64));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.Contains("high", text);
+        Assert.Contains("░░░░ ", text); // 5 cells
+        Assert.DoesNotContain("░░░░░░", text);
+    }
+
+    [Fact]
+    public void EffortShedsAfterTheBarAndBeforeTheTokenCount()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 57));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.DoesNotContain("high", text);
+        Assert.Contains("36.0k", text);
+    }
+
+    [Fact]
+    public void TokenCountShedsBeforeTheModel()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 51));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.Contains("Opus 4.8", text);
+        Assert.DoesNotContain("36.0k", text);
+    }
+
+    [Fact]
+    public void ModelShedsLastAndTheHeadlineIsCutOnlyAfterThat()
+    {
+        var atForty = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 40));
+        Assert.Contains("Probe model-opus-4-8", atForty);
+        Assert.DoesNotContain("Opus", atForty);
+
+        var thirty = Row.Compose(Probe(), Icons, IconSet.Nerd, 30);
+        var atThirty = StripAnsi(thirty);
+        Assert.DoesNotContain("Probe model-opus-4-8", atThirty);
+        Assert.StartsWith("● Probe", atThirty);
+        Assert.True(VisibleWidth(thirty) <= 30);
+    }
+
+    [Fact]
+    public void AShortHeadlineNeverForcesAShed()
+    {
+        var text = StripAnsi(Row.Compose(
+            Task(name: null, description: "tiny", model: "claude-opus-4-8", effortJson: "\"high\""), Icons, IconSet.Nerd, 52));
+        Assert.Contains("tiny", text);
+        Assert.Contains("high", text);
+        Assert.Contains("░░░░░░░░", text);
+    }
+
+    [Fact]
+    public void ATinyTailIsDroppedWithItsSeparator()
+    {
+        // 32 columns: "● code-review" plus the model-less 5-cell metrics leave
+        // room for a separator and four characters of description.
+        var content = Row.Compose(Task(name: "code-review", model: null, description: "/code-review max --fix"), Icons, IconSet.Nerd, 32);
+        var text = StripAnsi(content);
+        Assert.DoesNotContain("/co", text);
+        Assert.EndsWith("%", text); // nothing dangles after the metrics
+        Assert.True(VisibleWidth(content) <= 32);
+    }
+
+    [Fact]
+    public void AShortTailIsKeptWhole()
+    {
+        var text = StripAnsi(Row.Compose(Task(name: "code-review", model: null, description: "fix"), Icons, IconSet.Nerd, 46));
+        Assert.EndsWith("fix", text);
+    }
+
     private static IEnumerable<int> ExtractColorCodes(string ansiText)
     {
         foreach (System.Text.RegularExpressions.Match m in
