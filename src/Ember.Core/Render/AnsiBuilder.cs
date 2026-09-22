@@ -33,14 +33,38 @@ public sealed class AnsiBuilder
         return this;
     }
 
-    /// <summary>One colour per character (§5.3's gradient). <paramref name="colors"/> must have one entry per character of <paramref name="text"/>.</summary>
+    /// <summary>
+    /// One colour per character (§5.3's gradient). <paramref name="colors"/>
+    /// must have one entry per UTF-16 code unit of <paramref name="text"/>. A
+    /// surrogate pair is written as one unit in its high surrogate's colour:
+    /// an escape between the two halves would leave two unpaired surrogates,
+    /// which the UTF-8 or JSON encoder on the way out replaces with U+FFFD.
+    /// </summary>
     public AnsiBuilder Gradient(string text, int[] colors)
     {
         for (int i = 0; i < text.Length; i++)
         {
             _sb.Append(Palette.Fg(colors[i])).Append(text[i]);
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                _sb.Append(text[++i]);
+            }
         }
         Width += DisplayWidth(text);
+        return this;
+    }
+
+    /// <summary>
+    /// Appends everything <paramref name="other"/> has composed so far, escapes
+    /// included, so a segment can be composed and measured on its own before
+    /// the text ahead of it is fitted to the width it leaves over.
+    /// <paramref name="other"/> must not have been built: <see cref="Build"/>
+    /// appends the reset that belongs at the very end of a line.
+    /// </summary>
+    public AnsiBuilder Append(AnsiBuilder other)
+    {
+        _sb.Append(other._sb);
+        Width += other.Width;
         return this;
     }
 

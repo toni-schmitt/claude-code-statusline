@@ -109,6 +109,24 @@ public class AnsiBuilderTests
         Assert.True(idx == 1 || idx == 3, $"Expected 1 or 3, got {idx}");
     }
 
+    [Fact]
+    public void GradientKeepsSurrogatePairsTogether()
+    {
+        var text = "A😀"; // three UTF-16 code units, two characters
+        var output = new AnsiBuilder().Gradient(text, [230, 216, 166]).Build();
+        Assert.Contains($"{Palette.Fg(216)}😀", output); // the pair takes its high surrogate's colour, uninterrupted
+        Assert.DoesNotContain(Palette.Fg(166), output);
+    }
+
+    [Fact]
+    public void AppendCarriesTheOtherBuildersTextAndWidth()
+    {
+        var tail = new AnsiBuilder().Colored("中文", 240);
+        var b = new AnsiBuilder().Colored("a", 230).Append(tail);
+        Assert.Equal(5, b.Width);
+        Assert.EndsWith($"{Palette.Fg(240)}中文{Palette.Reset}", b.Build());
+    }
+
     private static int CountOccurrences(string haystack, string needle)
     {
         int count = 0, index = 0;

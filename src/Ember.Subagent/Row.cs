@@ -24,9 +24,50 @@ public static class Row
         var (marker, markerColor) = MarkerFor(task.Status, iconSet, icons);
         b.Colored($"{marker} ", markerColor);
 
-        var name = task.Name ?? task.Type ?? "";
-        if (active) b.Gradient(name, Gradient.ForText(name)); else b.Colored(name, Palette.UnfilledBar);
+        // The metrics are composed before the text that precedes them, so the
+        // headline can be fitted to whatever width they leave over.
+        var metrics = new AnsiBuilder();
+        AppendMetrics(metrics, task, icons, active, labelColor, sepColor);
 
+        // Only agents spawned with an explicit name carry `name`; a plain
+        // Agent-tool spawn arrives as `type: "local_agent"`, which says
+        // nothing about which spawn it is. Its description is the one stable
+        // text that sets it apart (`label` is the live activity and changes
+        // every tick), so it takes the name slot and is not repeated after
+        // the metrics.
+        var description = task.Description ?? "";
+        string headline, tail;
+        if (task.Name is { Length: > 0 } name)
+        {
+            headline = name;
+            tail = description;
+        }
+        else
+        {
+            headline = description.Length > 0 ? description : task.Type ?? "";
+            tail = "";
+        }
+
+        headline = Fit(headline, columns - b.Width - metrics.Width);
+        if (active) b.Gradient(headline, Gradient.ForText(headline)); else b.Colored(headline, Palette.UnfilledBar);
+        b.Append(metrics);
+
+        // The separator is only worth its columns when text follows it.
+        var separator = $" {icons.Separator} ";
+        tail = Fit(tail, columns - b.Width - AnsiBuilder.DisplayWidth(separator));
+        if (tail.Length is 0) return b.Build();
+
+        b.Colored(separator, sepColor);
+        b.Colored(tail, Palette.UnfilledBar);
+        return b.Build();
+    }
+
+    /// <summary>The longest prefix of <paramref name="text"/> that fits in <paramref name="room"/> columns; empty when no room is left.</summary>
+    private static string Fit(string text, int room) => text[..AnsiBuilder.TruncateToWidth(text, Math.Max(0, room))];
+
+    /// <summary>The model, effort and context segments that follow the name.</summary>
+    private static void AppendMetrics(AnsiBuilder b, SubagentTask task, IconGlyphs icons, bool active, int labelColor, int sepColor)
+    {
         if (task.Model is { Length: > 0 } modelId)
         {
             b.Colored($" {icons.Model} ", labelColor);
@@ -52,15 +93,6 @@ public static class Row
         var (pctColor, pctBold) = Palette.Severity(pct);
         b.Colored($" {Format.Percent(pct)}", active ? pctColor : Palette.UnfilledBar, active && pctBold);
         b.Colored($" {Format.TokenCount(task.TokenCount ?? 0)}", labelColor);
-
-        b.Colored($" {icons.Separator} ", sepColor);
-        int used = b.Width;
-        var desc = task.Description ?? "";
-        int room = Math.Max(0, columns - used);
-        int truncLen = AnsiBuilder.TruncateToWidth(desc, room);
-        b.Colored(desc[..truncLen], Palette.UnfilledBar);
-
-        return b.Build();
     }
 
     private static BarCell[] Flatten(BarCell[] cells)
@@ -77,14 +109,14 @@ public static class Row
     {
         "running" => (set == IconSet.Ascii ? "*" : "●", Palette.Branch),
         "failed" => (set == IconSet.Ascii ? "*" : "●", Palette.Critical),
-        "done" => (icons.Done, Palette.UnfilledBar),
-        _ => (set == IconSet.Ascii ? "." : "○", Palette.UnfilledBar), // queued / unrecognised
+        "done" or "completed" => (icons.Done, Palette.UnfilledBar), // §11.1 spells the finished state "done"; Claude Code sends "completed"
+        _ => (set == IconSet.Ascii ? "." : "○", Palette.UnfilledBar), // queued / pending / unrecognised
     };
 
     private static string? DescribeEffort(JsonElement effort) => effort.ValueKind switch
     {
         JsonValueKind.String => effort.GetString(),
-        JsonValueKind.Number => Format.TokenCount(effort.GetInt64()),
-        _ => null, // absent -> inherited (§11.1)
+        JsonValueKind.Number when effort.TryGetInt64(out long budget) => Format.TokenCount(budget),
+        _ => null, // absent -> inherited (§11.1); a non-integral budget is not a shape §11.1 defines, and a throw here would cost the whole row
     };
 }

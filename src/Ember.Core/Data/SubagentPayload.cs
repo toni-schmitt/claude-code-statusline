@@ -19,7 +19,7 @@ public sealed class SubagentStdinPayload
 }
 
 /// <summary>
-/// <c>type</c>, <c>label</c>, <c>startTime</c>, <c>cwd</c> and
+/// <c>label</c>, <c>startTime</c>, <c>cwd</c> and
 /// <c>tokenSamples</c> are part of §11.1's contract but aren't consumed by
 /// this design, so they aren't modelled here either.
 /// </summary>
@@ -32,10 +32,10 @@ public sealed class SubagentTask
     public string? Name { get; init; }
 
     [JsonPropertyName("type")]
-    public string? Type { get; init; } // fallback display name if Name is absent
+    public string? Type { get; init; } // "local_agent" for every Agent-tool spawn; the headline of last resort when neither name nor description is present
 
     [JsonPropertyName("status")]
-    public string? Status { get; init; } // running | queued | done | failed
+    public string? Status { get; init; } // pending | running | completed | failed | killed | paused, as Claude Code sends them; §11.1 spells the finished state "done"
 
     [JsonPropertyName("description")]
     public string? Description { get; init; }
