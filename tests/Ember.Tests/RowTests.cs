@@ -14,20 +14,24 @@ public class RowTests
     private static readonly IconGlyphs AsciiIcons = Ember.Core.Render.Icons.For(IconSet.Ascii);
 
     private static SubagentTask Task(
-        string? name = "Explore", string status = "running", string? model = "claude-haiku-4-5-20251001",
+        string? name = "Explore", string? type = null, string status = "running", string? model = "claude-haiku-4-5-20251001",
         string? effortJson = null, long? contextWindowSize = 200_000, long? tokenCount = 36_000,
         string? description = "locate the render call sites") => JsonSerializer.Deserialize<SubagentTask>(
         $$"""
         {
-            "name": {{(name is null ? "null" : $"\"{name}\"")}},
-            "status": "{{status}}",
-            "model": {{(model is null ? "null" : $"\"{model}\"")}},
+            "name": {{Json(name)}},
+            "type": {{Json(type)}},
+            "status": {{Json(status)}},
+            "model": {{Json(model)}},
             "effort": {{effortJson ?? "null"}},
             "contextWindowSize": {{(contextWindowSize?.ToString() ?? "null")}},
             "tokenCount": {{(tokenCount?.ToString() ?? "null")}},
-            "description": {{(description is null ? "null" : $"\"{description}\"")}}
+            "description": {{Json(description)}}
         }
         """, SubagentJsonContext.Default.SubagentTask)!;
+
+    /// <summary>A JSON string literal, or <c>null</c>, so a fixture value with quotes or backslashes still deserialises.</summary>
+    private static string Json(string? value) => value is null ? "null" : JsonSerializer.Serialize(value);
 
     [Fact]
     public void RunningRowUsesFullGradientAndSeverityBar()
@@ -49,6 +53,24 @@ public class RowTests
         Assert.Contains(Palette.Fg(Palette.Critical), content);
         // The name itself still gets the gradient treatment (§11.3: "full palette" for failed).
         Assert.Contains(Palette.Fg(Gradient.ForText("risky-task")[0]), content);
+    }
+
+    [Fact]
+    public void KilledRowRendersLikeAFailedOne()
+    {
+        var killed = Row.Compose(Task(status: "killed", name: "risky-task"), Icons, IconSet.Nerd, 100);
+        var failed = Row.Compose(Task(status: "failed", name: "risky-task"), Icons, IconSet.Nerd, 100);
+        Assert.Equal(failed, killed);
+    }
+
+    [Theory]
+    [InlineData("paused")]
+    [InlineData("pending")]
+    public void PausedAndPendingRowsUseTheQueuedMarker(string status)
+    {
+        var row = StripAnsi(Row.Compose(Task(status: status), Icons, IconSet.Nerd, 100));
+        var queued = StripAnsi(Row.Compose(Task(status: "queued"), Icons, IconSet.Nerd, 100));
+        Assert.Equal(queued[0], row[0]);
     }
 
     [Fact]
@@ -152,13 +174,188 @@ public class RowTests
     public void DescriptionWithSurrogatePairsDoesNotSplitThem()
     {
         var desc = "emoji: \U0001F600\U0001F601\U0001F602 done";
-        var content = Row.Compose(Task(description: desc), Icons, IconSet.Nerd, 60);
-        var text = StripAnsi(content);
-        for (int i = 0; i < text.Length - 1; i++)
+        // Once in the trailing slot (named row) and once promoted through the gradient (unnamed, active row).
+        AssertSurrogatePairsIntact(Row.Compose(Task(description: desc), Icons, IconSet.Nerd, 60));
+        AssertSurrogatePairsIntact(Row.Compose(Task(name: null, description: desc), Icons, IconSet.Nerd, 100));
+    }
+
+    /// <summary>Inspects the raw ANSI content: an escape between the two halves of a pair is the defect, and stripping escapes first would hide it.</summary>
+    private static void AssertSurrogatePairsIntact(string content)
+    {
+        for (int i = 0; i < content.Length; i++)
         {
-            if (char.IsHighSurrogate(text[i]))
-                Assert.True(char.IsLowSurrogate(text[i + 1]), "Surrogate pair was split during truncation");
+            if (char.IsHighSurrogate(content[i]))
+                Assert.True(i + 1 < content.Length && char.IsLowSurrogate(content[i + 1]), "Surrogate pair was split");
         }
+    }
+
+    [Fact]
+    public void NamedRowKeepsTheDescriptionAtTheEnd()
+    {
+        var text = StripAnsi(Row.Compose(Task(name: "Explore", description: "locate the render call sites"), Icons, IconSet.Nerd, 100));
+        Assert.StartsWith("● Explore", text);
+        Assert.EndsWith("locate the render call sites", text);
+    }
+
+    [Fact]
+    public void UnnamedRowPromotesTheDescriptionInsteadOfShowingTheType()
+    {
+        // Every plain Agent-tool spawn arrives as type "local_agent" with no name;
+        // the description is the stable text that tells those rows apart.
+        var text = StripAnsi(Row.Compose(
+            Task(name: null, type: "local_agent", description: "Probe model-opus-4-8"), Icons, IconSet.Nerd, 100));
+        Assert.StartsWith("● Probe model-opus-4-8", text);
+        Assert.DoesNotContain("local_agent", text);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(text, "Probe model-opus-4-8"));
+    }
+
+    [Fact]
+    public void UnnamedRowWithoutDescriptionFallsBackToTheType()
+    {
+        var text = StripAnsi(Row.Compose(Task(name: null, type: "local_agent", description: null), Icons, IconSet.Nerd, 100));
+        Assert.StartsWith("● local_agent", text);
+    }
+
+    [Fact]
+    public void UnnamedRowWithLongDescriptionStillFitsTheColumns()
+    {
+        var longDescription = new string('x', 500);
+        var content = Row.Compose(Task(name: null, description: longDescription), Icons, IconSet.Nerd, 60);
+        var text = StripAnsi(content);
+        Assert.True(VisibleWidth(content) <= 60);
+        Assert.Contains("ctx", text); // the metrics survive; only the promoted description is cut
+        Assert.Contains(new string('x', 10), text); // and cut, not removed
+    }
+
+    [Fact]
+    public void CompletedRowUsesTheDoneMarkerAndRendersFlat()
+    {
+        // Claude Code reports a finished task as "completed"; §11.1's "done" is accepted alongside it.
+        var content = Row.Compose(Task(status: "completed"), Icons, IconSet.Nerd, 100);
+        Assert.StartsWith(Icons.Done, StripAnsi(content));
+        foreach (var colorCode in ExtractColorCodes(content))
+        {
+            Assert.Equal(Palette.UnfilledBar, colorCode);
+        }
+    }
+
+    [Fact]
+    public void NamedRowWithoutDescriptionEndsAfterTheMetrics()
+    {
+        var text = StripAnsi(Row.Compose(Task(name: "probe", description: null), Icons, IconSet.Nerd, 100));
+        Assert.EndsWith("36.0k", text); // no separator pointing at nothing
+    }
+
+    [Fact]
+    public void NamedRowDropsTheSeparatorWhenNoRoomIsLeftForTheDescription()
+    {
+        // Marker, "Explore" and the metrics take 48 columns; a 3-column separator with nothing after it must not follow.
+        var content = Row.Compose(Task(), Icons, IconSet.Nerd, 50);
+        Assert.EndsWith("36.0k", StripAnsi(content));
+        Assert.True(VisibleWidth(content) <= 50);
+    }
+
+    [Fact]
+    public void UnnamedRowWithEmptyDescriptionFallsBackToTheType()
+    {
+        var text = StripAnsi(Row.Compose(Task(name: null, type: "local_agent", description: ""), Icons, IconSet.Nerd, 100));
+        Assert.StartsWith("● local_agent", text);
+    }
+
+    [Fact]
+    public void NamedRowWithLongNameStillFitsTheColumns()
+    {
+        var content = Row.Compose(Task(name: new string('n', 200)), Icons, IconSet.Nerd, 60);
+        Assert.True(VisibleWidth(content) <= 60);
+        Assert.Contains("ctx", StripAnsi(content)); // the metrics survive; the name is what gives way
+    }
+
+    // The unnamed fixture below is 20 columns of headline; with model "Opus 4.8",
+    // effort "high" and a 10-cell bar the metrics take 45 columns, so the row
+    // needs 67 columns before anything sheds.
+    private static SubagentTask Probe() =>
+        Task(name: null, type: "local_agent", description: "Probe model-opus-4-8", model: "claude-opus-4-8",
+            effortJson: "\"high\"", contextWindowSize: 200_000, tokenCount: 36_000);
+
+    [Fact]
+    public void WideRowShedsNothing()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 67));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.Contains("high", text);
+        Assert.Contains("░░░░░░░░", text); // 10-cell bar, 18% filled
+        Assert.Contains("36.0k", text);
+    }
+
+    [Fact]
+    public void BarHalvesBeforeTheHeadlineIsCut()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 64));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.Contains("high", text);
+        Assert.Contains("░░░░ ", text); // 5 cells
+        Assert.DoesNotContain("░░░░░░", text);
+    }
+
+    [Fact]
+    public void EffortShedsAfterTheBarAndBeforeTheTokenCount()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 57));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.DoesNotContain("high", text);
+        Assert.Contains("36.0k", text);
+    }
+
+    [Fact]
+    public void TokenCountShedsBeforeTheModel()
+    {
+        var text = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 51));
+        Assert.Contains("Probe model-opus-4-8", text);
+        Assert.Contains("Opus 4.8", text);
+        Assert.DoesNotContain("36.0k", text);
+    }
+
+    [Fact]
+    public void ModelShedsLastAndTheHeadlineIsCutOnlyAfterThat()
+    {
+        var atForty = StripAnsi(Row.Compose(Probe(), Icons, IconSet.Nerd, 40));
+        Assert.Contains("Probe model-opus-4-8", atForty);
+        Assert.DoesNotContain("Opus", atForty);
+
+        var thirty = Row.Compose(Probe(), Icons, IconSet.Nerd, 30);
+        var atThirty = StripAnsi(thirty);
+        Assert.DoesNotContain("Probe model-opus-4-8", atThirty);
+        Assert.StartsWith("● Probe", atThirty);
+        Assert.True(VisibleWidth(thirty) <= 30);
+    }
+
+    [Fact]
+    public void AShortHeadlineNeverForcesAShed()
+    {
+        var text = StripAnsi(Row.Compose(
+            Task(name: null, description: "tiny", model: "claude-opus-4-8", effortJson: "\"high\""), Icons, IconSet.Nerd, 52));
+        Assert.Contains("tiny", text);
+        Assert.Contains("high", text);
+        Assert.Contains("░░░░░░░░", text);
+    }
+
+    [Fact]
+    public void ATinyTailIsDroppedWithItsSeparator()
+    {
+        // 32 columns: "● code-review" plus the model-less 5-cell metrics leave
+        // room for a separator and four characters of description.
+        var content = Row.Compose(Task(name: "code-review", model: null, description: "/code-review max --fix"), Icons, IconSet.Nerd, 32);
+        var text = StripAnsi(content);
+        Assert.DoesNotContain("/co", text);
+        Assert.EndsWith("%", text); // nothing dangles after the metrics
+        Assert.True(VisibleWidth(content) <= 32);
+    }
+
+    [Fact]
+    public void AShortTailIsKeptWhole()
+    {
+        var text = StripAnsi(Row.Compose(Task(name: "code-review", model: null, description: "fix"), Icons, IconSet.Nerd, 46));
+        Assert.EndsWith("fix", text);
     }
 
     private static IEnumerable<int> ExtractColorCodes(string ansiText)
