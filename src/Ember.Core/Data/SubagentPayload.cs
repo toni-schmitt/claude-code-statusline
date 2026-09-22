@@ -35,7 +35,8 @@ public sealed class SubagentTask
     public string? Type { get; init; } // "local_agent" for every Agent-tool spawn; the headline of last resort when neither name nor description is present
 
     [JsonPropertyName("status")]
-    public string? Status { get; init; } // pending | running | completed | failed | killed | paused, as Claude Code sends them; §11.1 spells the finished state "done"
+    [JsonConverter(typeof(SubagentStatusJsonConverter))]
+    public SubagentStatus Status { get; init; }
 
     [JsonPropertyName("description")]
     public string? Description { get; init; }
@@ -53,6 +54,59 @@ public sealed class SubagentTask
 
     [JsonPropertyName("tokenCount")]
     public long? TokenCount { get; init; }
+}
+
+/// <summary>
+/// A task's lifecycle state. Claude Code sends <c>pending</c>, <c>running</c>,
+/// <c>completed</c>, <c>failed</c>, <c>killed</c> and <c>paused</c>; §11.1
+/// spells the first and third <c>queued</c> and <c>done</c>, and both spellings
+/// are accepted so the spec's examples keep rendering.
+/// </summary>
+public enum SubagentStatus
+{
+    Unknown,
+    Pending,
+    Running,
+    Completed,
+    Failed,
+    Killed,
+    Paused,
+}
+
+/// <summary>
+/// Maps the status string onto <see cref="SubagentStatus"/> at the JSON
+/// boundary, so the renderer never matches on spellings. Anything
+/// unrecognised, including a missing or non-string value, becomes
+/// <see cref="SubagentStatus.Unknown"/> rather than failing the payload: one
+/// odd task must not blank every row.
+/// </summary>
+public sealed class SubagentStatusJsonConverter : JsonConverter<SubagentStatus>
+{
+    public override bool HandleNull => true;
+
+    /// <inheritdoc/>
+    public override SubagentStatus Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType is not JsonTokenType.String) return SubagentStatus.Unknown;
+        return Parse(reader.GetString());
+    }
+
+    /// <inheritdoc/>
+    public override void Write(Utf8JsonWriter writer, SubagentStatus value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString().ToLowerInvariant());
+    }
+
+    public static SubagentStatus Parse(string? status) => status?.ToLowerInvariant() switch
+    {
+        "pending" or "queued" => SubagentStatus.Pending,
+        "running" => SubagentStatus.Running,
+        "completed" or "done" => SubagentStatus.Completed,
+        "failed" => SubagentStatus.Failed,
+        "killed" => SubagentStatus.Killed,
+        "paused" => SubagentStatus.Paused,
+        _ => SubagentStatus.Unknown,
+    };
 }
 
 /// <summary>§11.2's output contract: one line per row to override.</summary>

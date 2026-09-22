@@ -17,7 +17,7 @@ public static class Row
     public static string Compose(SubagentTask task, IconGlyphs icons, IconSet iconSet, int columns)
     {
         var b = new AnsiBuilder();
-        bool active = task.Status is "running" or "failed"; // §11.3: queued/done render flat 240
+        bool active = task.Status is SubagentStatus.Running or SubagentStatus.Failed; // §11.3: queued/done render flat 240
         int labelColor = active ? Palette.Label : Palette.UnfilledBar;
         int sepColor = active ? Palette.Separator : Palette.UnfilledBar;
 
@@ -105,12 +105,12 @@ public static class Row
         return flat;
     }
 
-    private static (string Glyph, int Color) MarkerFor(string? status, IconSet set, IconGlyphs icons) => status switch
+    private static (string Glyph, int Color) MarkerFor(SubagentStatus status, IconSet set, IconGlyphs icons) => status switch
     {
-        "running" => (set == IconSet.Ascii ? "*" : "●", Palette.Branch),
-        "failed" => (set == IconSet.Ascii ? "*" : "●", Palette.Critical),
-        "done" or "completed" => (icons.Done, Palette.UnfilledBar), // §11.1 spells the finished state "done"; Claude Code sends "completed"
-        _ => (set == IconSet.Ascii ? "." : "○", Palette.UnfilledBar), // queued / pending / unrecognised
+        SubagentStatus.Running => (set == IconSet.Ascii ? "*" : "●", Palette.Branch),
+        SubagentStatus.Failed => (set == IconSet.Ascii ? "*" : "●", Palette.Critical),
+        SubagentStatus.Completed => (icons.Done, Palette.UnfilledBar),
+        _ => (set == IconSet.Ascii ? "." : "○", Palette.UnfilledBar), // pending / paused / killed / unknown
     };
 
     private static string? DescribeEffort(JsonElement effort) => effort.ValueKind switch
