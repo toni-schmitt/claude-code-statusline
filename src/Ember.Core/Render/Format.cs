@@ -96,9 +96,16 @@ public static class Format
     public static double MinorUnitsToMajor(long minorUnits, string isoCode) =>
         IsZeroDecimalCurrency(isoCode) ? minorUnits : minorUnits / 100.0;
 
-    /// <summary>Compact token count, shared by Line 1's ctx segment (§2.1) and subagent rows (§11.3): "36.0k", "175.1k", "0". Below 1000, the plain integer rather than "0.4k".</summary>
-    public static string TokenCount(long count) =>
-        count < 1000
-            ? count.ToString(CultureInfo.InvariantCulture)
-            : $"{(count / 1000.0).ToString("F1", CultureInfo.InvariantCulture)}k";
+    /// <summary>
+    /// Compact token count, shared by Line 1's ctx segment (§2.1) and subagent
+    /// rows (§11.3): "36.0k", "175.1k", "1.2M", "0". Below 1000, the plain
+    /// integer rather than "0.4k". The M tier keeps a 1M-window count at the
+    /// same width as a k one; without it a full window read "1000.0k".
+    /// </summary>
+    public static string TokenCount(long count)
+    {
+        if (count < 1000) return count.ToString(CultureInfo.InvariantCulture);
+        if (count < 1_000_000) return $"{(count / 1000.0).ToString("F1", CultureInfo.InvariantCulture)}k";
+        return $"{(count / 1_000_000.0).ToString("F1", CultureInfo.InvariantCulture)}M";
+    }
 }
