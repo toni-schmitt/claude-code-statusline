@@ -1,0 +1,4 @@
+{
+  "description": "Renders Ember-styled subagent rows via Claude Code's AgentRow ui.render hook",
+  "modules": ["./register.tsx"]
+}

@@ -25,6 +25,9 @@ dist/
 # Local agent settings (machine-specific, never shared)
 .claude/settings.local.json
 
+# Generated Claude Code mod type definitions (written locally on --plugin-dir)
+mod/.claude-plugin/types/
+
 # Status line preview build artifacts (regenerate with tools/preview)
 tools/preview/build/
 __pycache__/

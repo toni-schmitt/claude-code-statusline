@@ -6,6 +6,12 @@ using Ember.Core.Render;
 
 namespace Ember.Subagent;
 
+/// <summary>
+/// Legacy <c>subagentStatusLine</c> binary, soft-deprecated because Claude Code
+/// deprecated <c>subagentStatusLine</c> in favor of mods (<c>AgentRow</c> in
+/// <c>mod/</c>). Still built and shipped for older Claude Code versions
+/// (&lt;= 2.1.322) via <c>ember --install --legacy-subagent</c>.
+/// </summary>
 public static class Program
 {
     public static int Main(string[] args)

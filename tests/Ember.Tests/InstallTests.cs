@@ -26,7 +26,7 @@ public class InstallTests : IDisposable
     }
 
     [Fact]
-    public void InstallPreservesExistingKeys()
+    public void InstallPreservesExistingKeysAndOmitsDeprecatedSubagentStatusLineByDefault()
     {
         File.WriteAllText(_settingsPath, """{"myCustomKey":"keepMe","allowedTools":["bash"]}""");
 
@@ -35,7 +35,76 @@ public class InstallTests : IDisposable
         var root = JsonNode.Parse(File.ReadAllText(_settingsPath))!.AsObject();
         Assert.Equal("keepMe", root["myCustomKey"]?.GetValue<string>());
         Assert.NotNull(root["statusLine"]);
+        Assert.Null(root["subagentStatusLine"]);
+    }
+
+    [Fact]
+    public void InstallRemovesStaleEmberSubagentStatusLine()
+    {
+        File.WriteAllText(_settingsPath, """
+        {
+            "myCustomKey": "keepMe",
+            "subagentStatusLine": {
+                "type": "command",
+                "command": "/opt/homebrew/bin/ember-subagent --icons=unicode"
+            }
+        }
+        """);
+
+        Ember.Program.Main(["--install"]);
+
+        var root = JsonNode.Parse(File.ReadAllText(_settingsPath))!.AsObject();
+        Assert.Equal("keepMe", root["myCustomKey"]?.GetValue<string>());
+        Assert.NotNull(root["statusLine"]);
+        Assert.Null(root["subagentStatusLine"]);
+    }
+
+    [Fact]
+    public void InstallPreservesNonEmberSubagentStatusLine()
+    {
+        File.WriteAllText(_settingsPath, """
+        {
+            "subagentStatusLine": {
+                "type": "command",
+                "command": "sh ~/.claude/custom-subagent.sh"
+            }
+        }
+        """);
+
+        Ember.Program.Main(["--install"]);
+
+        var root = JsonNode.Parse(File.ReadAllText(_settingsPath))!.AsObject();
+        Assert.NotNull(root["statusLine"]);
+        Assert.Equal("sh ~/.claude/custom-subagent.sh", root["subagentStatusLine"]?["command"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void InstallWithLegacySubagentWritesSubagentStatusLine()
+    {
+        File.WriteAllText(_settingsPath, """{"myCustomKey":"keepMe"}""");
+
+        Ember.Program.Main(["--install", "--legacy-subagent"]);
+
+        var root = JsonNode.Parse(File.ReadAllText(_settingsPath))!.AsObject();
+        Assert.Equal("keepMe", root["myCustomKey"]?.GetValue<string>());
+        Assert.NotNull(root["statusLine"]);
         Assert.NotNull(root["subagentStatusLine"]);
+        Assert.EndsWith("ember-subagent", root["subagentStatusLine"]?["command"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("""{"type":"command","command":"/opt/homebrew/bin/ember-subagent"}""", true)]
+    [InlineData("""{"type":"command","command":"/usr/local/bin/ember-subagent --icons=ascii"}""", true)]
+    [InlineData("""{"type":"command","command":"\"/Users/me/My Tools/ember-subagent\" --icons=unicode"}""", true)]
+    [InlineData("""{"type":"command","command":"ember-subagent"}""", true)]
+    [InlineData("""{"type":"command","command":"sh ~/.claude/other.sh"}""", false)]
+    [InlineData("""{"type":"command","command":"/usr/local/bin/wrapper ember-subagent"}""", false)]
+    [InlineData("""{"type":"command","command":123}""", false)]
+    [InlineData("""{"type":"command"}""", false)]
+    public void IsEmberSubagentCommandDetectsOnlyEmberSubagent(string json, bool expected)
+    {
+        var node = JsonNode.Parse(json);
+        Assert.Equal(expected, Ember.Program.IsEmberSubagentCommand(node));
     }
 
     [Fact]

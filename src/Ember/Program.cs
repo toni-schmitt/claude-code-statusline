@@ -19,7 +19,7 @@ public static class Program
                 case EmberMode.Refresh:
                     return RunRefresh();
                 case EmberMode.Install:
-                    RunInstall();
+                    RunInstall(options);
                     return 0;
                 default:
                     RunRender(options);
@@ -214,8 +214,46 @@ public static class Program
         }
     }
 
-    /// <summary>§15's install block, merging rather than overwriting. Best-effort: unconditionally overwrites only the two statusline keys, leaving the rest of settings.json untouched.</summary>
-    private static void RunInstall()
+    /// <summary>
+    /// Returns true when a <c>subagentStatusLine</c> settings node invokes Ember's own
+    /// <c>ember-subagent</c> binary. Used by <c>--install</c> to clean up stale entries
+    /// written by earlier Ember versions without touching third-party commands.
+    /// </summary>
+    internal static bool IsEmberSubagentCommand(JsonNode? node)
+    {
+        if (node is not JsonObject obj) return false;
+        if (obj["command"] is not JsonValue val || !val.TryGetValue<string>(out var cmd)) return false;
+
+        var trimmed = cmd.TrimStart();
+        if (trimmed.Length == 0) return false;
+
+        string executable;
+        if (trimmed[0] is '"' or '\'')
+        {
+            int endQuote = trimmed.IndexOf(trimmed[0], 1);
+            executable = endQuote > 1 ? trimmed[1..endQuote] : trimmed[1..];
+        }
+        else
+        {
+            int space = trimmed.IndexOfAny([' ', '\t']);
+            executable = space > 0 ? trimmed[..space] : trimmed;
+        }
+
+        var fileName = Path.GetFileName(executable);
+        return fileName.Equals("ember-subagent", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("ember-subagent.exe", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private const string ModInstallCommand =
+        "claude plugin install ember-subagent --marketplace toni-schmitt/claude-code-statusline";
+
+    /// <summary>
+    /// §15's install block, merging rather than overwriting. Writes <c>statusLine</c> and removes
+    /// any stale Ember-managed <c>subagentStatusLine</c> entry (deprecated by Claude Code in favor
+    /// of mods). Passing <c>--legacy-subagent</c> opts back into writing <c>subagentStatusLine</c>
+    /// for older Claude Code versions (&lt;= 2.1.322).
+    /// </summary>
+    private static void RunInstall(Options options)
     {
         try
         {
@@ -244,16 +282,44 @@ public static class Program
                 ["command"] = exePath,
                 ["refreshInterval"] = 15,
             };
-            root["subagentStatusLine"] = new JsonObject
+
+            bool removedLegacy = false;
+            if (options.LegacySubagent)
             {
-                ["type"] = "command",
-                ["command"] = subagentPath,
-            };
+                root["subagentStatusLine"] = new JsonObject
+                {
+                    ["type"] = "command",
+                    ["command"] = subagentPath,
+                };
+            }
+            else if (IsEmberSubagentCommand(root["subagentStatusLine"]))
+            {
+                root.Remove("subagentStatusLine");
+                removedLegacy = true;
+            }
 
             var dir = Path.GetDirectoryName(settingsPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(settingsPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            Console.WriteLine($"Wrote {settingsPath}");
+
+            if (options.LegacySubagent)
+            {
+                Console.WriteLine($"Wrote {settingsPath} (including deprecated subagentStatusLine for older Claude Code versions)");
+                Console.WriteLine($"Note: Claude Code deprecated subagentStatusLine in favor of mods. On current Claude Code, run `ember --install` and install the Ember mod instead:\n  {ModInstallCommand}");
+            }
+            else
+            {
+                Console.WriteLine($"Wrote {settingsPath}");
+                if (removedLegacy)
+                {
+                    Console.WriteLine("Removed deprecated subagentStatusLine entry (ember-subagent).");
+                }
+                Console.WriteLine($"For subagent rows in current Claude Code, install the Ember mod:\n  {ModInstallCommand}");
+                if (removedLegacy)
+                {
+                    Console.WriteLine("On older Claude Code versions (<= 2.1.322), re-run with: ember --install --legacy-subagent");
+                }
+            }
         }
         catch (Exception ex)
         {

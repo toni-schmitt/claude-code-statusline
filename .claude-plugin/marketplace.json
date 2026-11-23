@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "ember",
+  "owner": {
+    "name": "Toni Schmitt"
+  },
+  "metadata": {
+    "description": "Ember plugins for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "ember-subagent",
+      "source": "./mod",
+      "description": "Ember subagent rows for Claude Code — model, effort, context bar and description in the Ember palette.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Toni Schmitt"
+      },
+      "license": "MIT",
+      "repository": "https://github.com/toni-schmitt/claude-code-statusline"
+    }
+  ]
+}

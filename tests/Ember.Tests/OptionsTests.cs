@@ -13,6 +13,7 @@ public class OptionsTests
         var options = Options.Parse([]);
         Assert.Equal(IconSet.Nerd, options.Icons);
         Assert.Equal(EmberMode.Render, options.Mode);
+        Assert.False(options.LegacySubagent);
     }
 
     [Theory]
@@ -51,10 +52,19 @@ public class OptionsTests
     }
 
     [Fact]
+    public void LegacySubagentFlagSetsLegacySubagent()
+    {
+        var options = Options.Parse(["--install", "--legacy-subagent"]);
+        Assert.Equal(EmberMode.Install, options.Mode);
+        Assert.True(options.LegacySubagent);
+    }
+
+    [Fact]
     public void FlagsCombineFreely()
     {
         var options = Options.Parse(["--icons=ascii", "--refresh", "--unknown"]);
         Assert.Equal(IconSet.Ascii, options.Icons);
         Assert.Equal(EmberMode.Refresh, options.Mode);
+        Assert.False(options.LegacySubagent);
     }
 }
