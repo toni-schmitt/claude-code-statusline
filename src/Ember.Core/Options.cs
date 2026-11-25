@@ -19,17 +19,19 @@ public enum EmberMode
 /// without editing a command string by hand.
 /// </para>
 /// </summary>
-public sealed record Options(IconSet Icons, EmberMode Mode)
+public sealed record Options(IconSet Icons, EmberMode Mode, bool LegacySubagent = false)
 {
     public static Options Parse(string[] args)
     {
         var icons = IconSet.Nerd;
         var mode = EmberMode.Render;
+        var legacySubagent = false;
 
         foreach (var arg in args)
         {
             if (arg == "--refresh") { mode = EmberMode.Refresh; continue; }
             if (arg == "--install") { mode = EmberMode.Install; continue; }
+            if (arg == "--legacy-subagent") { legacySubagent = true; continue; }
 
             if (arg.StartsWith("--icons=", StringComparison.Ordinal))
             {
@@ -46,6 +48,6 @@ public sealed record Options(IconSet Icons, EmberMode Mode)
             // anything else: ignored, not fatal (§15.1)
         }
 
-        return new Options(icons, mode);
+        return new Options(icons, mode, legacySubagent);
     }
 }

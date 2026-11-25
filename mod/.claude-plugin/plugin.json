@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "ember-subagent",
+  "version": "0.1.0",
+  "description": "Ember subagent rows for Claude Code — model, effort, context bar and description in the Ember palette.",
+  "author": {
+    "name": "Toni Schmitt"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/toni-schmitt/claude-code-statusline",
+  "userConfig": {
+    "icons": {
+      "title": "Icon set",
+      "description": "Icon set for subagent rows: nerd (default), unicode, or ascii",
+      "type": "string",
+      "default": "nerd"
+    }
+  }
+}

@@ -21,7 +21,7 @@ Either window can trigger that escalation — a full weekly window stops work ju
 
 On an API key or any account without Claude's rate-limit data, line 1 is unaffected and line 2 degrades gracefully to just the spend estimate. On a narrow terminal, both lines shed segments in a defined order rather than wrapping or truncating mid-glyph.
 
-The companion (`ember-subagent`) renders the same grammar, narrower, for each subagent row Claude Code shows while a task is running.
+The companion subagent renderer renders the same grammar, narrower, for each subagent row Claude Code shows while a task is running — as a **Claude Code mod** ([`mod/`](mod/)) via the `AgentRow` hook on Claude Code v2.1.326+, with the legacy `ember-subagent` binary still shipped (soft-deprecated) for older Claude Code versions.
 
 ## What it looks like
 
@@ -293,13 +293,15 @@ cp out/ember out/ember-subagent ~/.local/bin/
 
 ## Configuring Claude Code
 
-Let `ember` write the config for you:
+### Status line (`ember`)
+
+Let `ember` write the `statusLine` block for you:
 
 ```sh
 ember --install
 ```
 
-This merges the status line block into your existing `~/.claude/settings.json` (rather than overwriting it) using the binary's own resolved path.
+This merges the `statusLine` block into your existing `~/.claude/settings.json` (rather than overwriting it) using the binary's own resolved path, and cleans up any stale Ember-managed `subagentStatusLine` entry from an earlier install.
 
 Or configure it by hand:
 
@@ -310,25 +312,56 @@ Or configure it by hand:
     "type": "command",
     "command": "/absolute/path/to/ember",
     "refreshInterval": 15
-  },
-  "subagentStatusLine": {
-    "type": "command",
-    "command": "/absolute/path/to/ember-subagent"
   }
 }
 ```
 
 `refreshInterval: 15` matters: the session clock and both countdowns are time-based and would otherwise only update when Claude Code re-runs the command for an unrelated reason. Fifteen seconds keeps them visibly live without spending more than a fraction of a percent of a core (native startup is ~8ms).
 
+### Subagent rows (Claude Code mod)
+
+Claude Code deprecated the `subagentStatusLine` setting in favor of **mods** (`AgentRow` `ui.render` hook, Claude Code v2.1.326+). Install the companion Ember mod directly from this repository:
+
+```sh
+claude plugin install ember-subagent --marketplace toni-schmitt/claude-code-statusline
+```
+
+Or inside a Claude Code session:
+
+```text
+/plugin marketplace add toni-schmitt/claude-code-statusline
+/plugin install ember-subagent@ember
+```
+
+To use Unicode or ASCII icons in the mod instead of Nerd Font glyphs, pass `--config icons=unicode` (or `ascii`) on install, or run `/plugin configure ember-subagent@ember`.
+
+#### Legacy `subagentStatusLine` (deprecated, Claude Code ≤ 2.1.322)
+
+The standalone `ember-subagent` binary is still built and shipped so users pinned on older Claude Code versions can keep using it. To have `ember --install` write the legacy `subagentStatusLine` entry as well:
+
+```sh
+ember --install --legacy-subagent
+```
+
+Or add it to `~/.claude/settings.json` by hand:
+
+```jsonc
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "/absolute/path/to/ember-subagent"
+  }
+```
+
 ### Flags
 
-Set these on the command itself, e.g. `"command": "/path/to/ember --icons=unicode"`.
+Set `--icons` on the command itself, e.g. `"command": "/path/to/ember --icons=unicode"`.
 
 | Flag | Default | Effect |
 |---|---|---|
 | `--icons=nerd\|unicode\|ascii` | `nerd` | Icon set |
 | `--refresh` | — | Runs the detached usage-cache refresh; not for `settings.json` |
-| `--install` | — | Writes the settings block above into `settings.json` |
+| `--install` | — | Writes `statusLine` into `settings.json` and removes any stale Ember `subagentStatusLine` |
+| `--legacy-subagent` | — | Deprecated: combine with `--install` to also write `subagentStatusLine` for Claude Code ≤ 2.1.322 |
 
 Every segment is on by default. Turning individual segments off is planned for
 `--install` itself — it will ask, store the answers in `settings.json`, leave them
@@ -356,6 +389,9 @@ echo '{"model":{"display_name":"Opus 5"},"effort":{"level":"xhigh"},
 ```sh
 dotnet build Ember.slnx
 dotnet test tests/Ember.Tests/Ember.Tests.csproj
+
+claude plugin validate --strict .
+claude plugin test mod
 ```
 
 ## License

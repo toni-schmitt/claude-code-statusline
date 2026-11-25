@@ -49,15 +49,24 @@ class Ember < Formula
 
   def caveats
     <<~EOS
-      Point Claude Code at the binaries:
+      Point Claude Code at the status line binary:
 
         ember --install
 
       That merges the statusLine block into ~/.claude/settings.json rather than
-      overwriting it, using this formula's own resolved paths.
+      overwriting it, using this formula's own resolved path.
+
+      For Ember subagent rows in current Claude Code (v2.1.326+), install the
+      companion Claude Code mod:
+
+        claude plugin install ember-subagent --marketplace toni-schmitt/claude-code-statusline
+
+      On older Claude Code versions (<= 2.1.322) that still use the deprecated
+      subagentStatusLine setting, run `ember --install --legacy-subagent` instead.
 
       The default icon set needs a Nerd Font in your terminal. Without one, add
-      --icons=unicode (or --icons=ascii) to the command in settings.json.
+      --icons=unicode (or --icons=ascii) to the statusLine command in settings.json
+      and configure the mod with `/plugin configure ember-subagent@ember`.
     EOS
   end
 

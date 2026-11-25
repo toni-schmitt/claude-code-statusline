@@ -51,6 +51,36 @@ jobs:
       - name: Test
         run: dotnet test tests/Ember.Tests/Ember.Tests.csproj -c Release --no-build
 
+  mod:
+    name: Validate Claude Code mod manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check marketplace, plugin and hooks manifests
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path(".")
+          mkt = json.loads((root / ".claude-plugin/marketplace.json").read_text())
+          plugin_entry = next(p for p in mkt["plugins"] if p["name"] == "ember-subagent")
+          plugin_dir = root / plugin_entry["source"]
+          manifest = json.loads((plugin_dir / ".claude-plugin/plugin.json").read_text())
+          hooks = json.loads((plugin_dir / "hooks/hooks.json").read_text())
+
+          assert manifest["name"] == plugin_entry["name"], "plugin name mismatch"
+          assert manifest["version"] == plugin_entry["version"], "plugin version mismatch"
+          assert hooks.get("modules"), "hooks.json must declare at least one module"
+          for mod in hooks["modules"]:
+              target = (plugin_dir / "hooks" / mod).resolve()
+              assert target.is_file(), f"missing hooks module: {target}"
+          print("Claude Code mod manifests OK")
+          PY
+
   aot:
     name: AOT publish on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
